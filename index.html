@@ -172,7 +172,7 @@ textarea.in1{height:84px;padding:12px 14px;resize:none}
 <script>
 (function () {
   'use strict';
-  var APP_VER = '1.7.0';
+  var APP_VER = '1.7.1';
   // 휴대폰 앱(GitHub Pages)에서 쓸 때만: Apps Script 웹 앱 주소(…/exec). Apps Script 안에서 열면 쓰지 않아요.
   var API_URL = window.FAMCAL_API_URL || '';
   var DOW = ['일', '월', '화', '수', '목', '금', '토'];
@@ -731,14 +731,11 @@ textarea.in1{height:84px;padding:12px 14px;resize:none}
   }
 
   function renderWho() {
-    var list = (S.joinMembers || []).filter(function (m) { return m.name !== '가족'; });
     app.innerHTML = '<div class="join">' + joinHead('승인 요청하기', '이름과 캐릭터를 고르면 관리자에게 승인 요청이 가요.', preview(S.reqKind, S.reqColor, S.reqName)) +
       '<form id="reqform" class="form" novalidate>' +
       '<div class="f"><label for="r_name">내 이름 <span style="font-weight:400;color:var(--mute)">(가족이 부르는 이름)</span></label>' +
       '<input class="in1" id="r_name" maxlength="10" autocomplete="off" value="' + esc(S.reqName) + '" placeholder="예: 아빠, 할머니, 지우">' +
-      (list.length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px" role="group" aria-label="이미 있는 이름 고르기"><span style="font-size:12px;color:var(--mute);align-self:center">이미 있는 이름:</span>' +
-        list.map(function (m) { return '<button type="button" class="chip" data-req="' + esc(m.name) + '" style="height:36px">' + head(m.name, 26) + esc(m.name) + '</button>'; }).join('') + '</div>' : '') +
-      '</div>' + picker(S.reqKind, S.reqColor) +
+      '<p style="margin:8px 0 0;font-size:12px;color:var(--mute);line-height:1.5">이미 쓰던 이름이면 똑같이 적어 주세요. 승인되면 그 이름으로 이어져요.</p></div>' + picker(S.reqKind, S.reqColor) +
       '<div class="f"><label for="r_memo">어떤 기기로 신청하나요?</label>' +
       '<input class="in1" id="r_memo" maxlength="40" autocomplete="off" value="' + esc(S.reqMemo) + '" placeholder="예: 새로 바꾼 아이폰"></div>' +
       '<div class="tip tail">이 기기의 확인 번호 · 관리자가 물어보면 알려 주세요<b>' + tail() + '</b></div>' +
