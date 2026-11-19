@@ -40,7 +40,7 @@ button{cursor:pointer}
 .chip.all{padding:0 16px}
 .chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:700}
 .av{border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;overflow:hidden}
-main{flex:1;padding:0 16px calc(110px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:14px}
+main{flex:1;padding:0 max(16px,env(safe-area-inset-right)) calc(110px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:14px}
 .dday{background:var(--yellow);border-radius:24px;padding:14px 12px 14px 18px;display:flex;justify-content:space-between;align-items:center;border:none;text-align:left;width:100%;overflow:hidden}
 .dday{color:var(--accInk)}.dday .k{display:block;font-size:12px;font-weight:700;color:var(--accInk2)}
 .dday .t{display:block;font-size:21px;margin:2px 0}
@@ -73,7 +73,10 @@ nav.tabs .plus{width:58px;height:58px;border-radius:29px;background:var(--main);
 .themes button.on{border-color:var(--main);box-shadow:0 0 0 2px var(--main) inset}
 .themes i{width:34px;height:34px;border-radius:17px;display:block;border:2px solid rgba(0,0,0,.08)}
 .range{display:inline-block;font-size:11px;font-weight:700;color:var(--main);background:color-mix(in srgb,var(--main) 12%,transparent);border-radius:6px;padding:0 5px;margin-left:4px}
-input[type=date].in1,input[type=time].in1{-webkit-appearance:none;appearance:none;display:flex;align-items:center;min-height:52px;line-height:52px;text-align:left}
+input[type=date].in1,input[type=time].in1{-webkit-appearance:none;appearance:none;display:block;width:100%;min-width:0;max-width:100%;min-height:52px;line-height:normal;text-align:left;box-sizing:border-box}
+input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and-time-value{min-height:1.4em}
+.two>.f{min-width:0}
+body{padding-top:env(safe-area-inset-top)}
 input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and-time-value{text-align:left}
 .cal{background:var(--card);border:2px solid var(--line);border-radius:22px;padding:10px 4px 8px}
 .cal .g{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
@@ -139,7 +142,7 @@ textarea.in1{height:84px;padding:12px 14px;resize:none}
 .cm{display:flex;gap:10px;align-items:flex-start}
 .cm .bub{flex:1;min-width:0;background:var(--card);border:2px solid var(--line);border-radius:6px 18px 18px 18px;padding:8px 12px}
 .cm .bub .h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-.cm .bub .h b{font-size:13px}.cm .bub .h span{font-size:11px;color:var(--mute)}
+.cm .bub .h b{font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cm .bub .h span{font-size:11px;color:var(--mute);white-space:nowrap;flex:none}
 .cm .bub p{margin:2px 0 0;font-size:14px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
 .cm .del{border:none;background:transparent;color:var(--mute);font-size:12px;padding:6px 0 0;min-height:24px}
 .cbar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:2px solid var(--line);z-index:6;padding:10px 12px calc(14px + env(safe-area-inset-bottom))}
@@ -180,7 +183,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
 <script>
 (function () {
   'use strict';
-  var APP_VER = '1.9.2';
+  var APP_VER = '1.9.3';
   var THEMES = [['dino', '공룡 숲', '#2F7A4A', '#FFF8EC'], ['sea', '바다', '#1F6FA8', '#EEF6FB'], ['berry', '딸기우유', '#C93D6F', '#FFF4F6'], ['night', '밤하늘', '#4FB37C', '#12161E'], ['clean', '깔끔한 흰색', '#2F5DA8', '#F6F7F9']];
   function applyTheme(t) {
     if (!THEMES.some(function (x) { return x[0] === t; })) t = 'dino';
@@ -331,9 +334,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
   function hm(t) {
     if (!t) return '하루 종일';
     var h = +t.slice(0, 2), m = t.slice(3);
-    // 새벽(0~5시)·오전(6~11)·낮(12~17)·저녁(18~20)·밤(21~23)으로 나눠서 헷갈리지 않게
-    var part = h < 6 ? '새벽' : h < 12 ? '오전' : h < 18 ? '낮' : h < 21 ? '저녁' : '밤';
-    return part + ' ' + ((h % 12) || 12) + ':' + m;
+    return (h < 10 ? '0' : '') + h + ':' + m; // 24시간 (예: 23:10)
   }
   function ago(at) {
     if (!at) return '';
@@ -652,7 +653,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       h += '<div class="cm">' + head(c.name, 38) + '<div style="flex:1;min-width:0"><div class="bub"><div class="h"><b>' + esc(c.name) + '</b><span>' + ago(c.at) + '</span></div><p>' + esc(c.text) + '</p></div>' +
         (c.mine ? '<button class="del" data-delcm="' + esc(c.id) + '">지우기</button>' : '') + '</div></div>';
     });
-    h += '</main><div class="cbar"><form id="cform"><span class="sit">' + dino(S.me || '가족', 60, true) + '</span><label class="sr" for="c_text">댓글 쓰기</label>' +
+    h += '</main><div class="cbar"><form id="cform"><label class="sr" for="c_text">댓글 쓰기</label>' +
       '<input id="c_text" maxlength="200" autocomplete="off" placeholder="댓글을 남겨 주세요"><button type="submit" aria-label="댓글 보내기">' + ic('send', 20, 'var(--onmain)', 2.2) + '</button></form></div>';
     return h;
   }
