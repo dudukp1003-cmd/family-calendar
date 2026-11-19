@@ -180,7 +180,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
 <script>
 (function () {
   'use strict';
-  var APP_VER = '1.9.0';
+  var APP_VER = '1.9.1';
   var THEMES = [['dino', '공룡 숲', '#2F7A4A', '#FFF8EC'], ['sea', '바다', '#1F6FA8', '#EEF6FB'], ['berry', '딸기우유', '#C93D6F', '#FFF4F6'], ['night', '밤하늘', '#4FB37C', '#12161E'], ['clean', '깔끔한 흰색', '#2F5DA8', '#F6F7F9']];
   function applyTheme(t) {
     if (!THEMES.some(function (x) { return x[0] === t; })) t = 'dino';
@@ -335,8 +335,12 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
   }
   function ago(at) {
     if (!at) return '';
-    var d = at.slice(0, 10), t = at.slice(11, 16);
-    return (d === today() ? '' : (+d.slice(5, 7)) + '/' + (+d.slice(8, 10)) + ' ') + hm(t);
+    var d = String(at).slice(0, 10), t = String(at).slice(11, 16);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return String(at);
+    var day = d === today() ? '오늘' : d === addDays(today(), -1) ? '어제'
+      : (+d.slice(5, 7)) + '월 ' + (+d.slice(8, 10)) + '일(' + DOW[parse(d).getDay()] + ')';
+    if (d.slice(0, 4) !== today().slice(0, 4)) day = d.slice(0, 4) + '년 ' + day;
+    return day + ' ' + hm(t);
   }
   function occurs(ev, day) {
     var span = ev.end && ev.end > ev.date ? diffDays(ev.date, ev.end) : 0;
