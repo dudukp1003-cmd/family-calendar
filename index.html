@@ -69,7 +69,7 @@ nav.tabs .plus{width:58px;height:58px;border-radius:29px;background:var(--main);
 .news{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-bottom:2px dashed var(--dash);background:transparent;border-left:none;border-right:none;border-top:none;width:100%;text-align:left}
 .news:last-child{border-bottom:none}.news.new{background:color-mix(in srgb,var(--main) 8%,transparent)}
 .news b{font-size:14px}.news small{display:block;font-size:12px;color:var(--mute)}
-.themes{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.themes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .themes button{border:2px solid var(--line2);background:var(--card);border-radius:14px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--ink)}
 .themes button.on{border-color:var(--main);box-shadow:0 0 0 2px var(--main) inset}
 .themes i{width:34px;height:34px;border-radius:17px;display:block;border:2px solid rgba(0,0,0,.08)}
@@ -179,6 +179,21 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
 .srch input:focus{outline:none;border-color:var(--main)}
 .hit mark{background:color-mix(in srgb,var(--main) 22%,transparent);color:inherit;border-radius:3px;padding:0 1px}
 .bell-on{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:700;color:var(--main)}
+.upd{position:fixed;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top));z-index:30;background:var(--ink);color:var(--bg);border-radius:22px;padding:8px 8px 8px 16px;display:flex;gap:10px;align-items:center;font-size:14px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.18);max-width:calc(100% - 24px)}
+.upd button{border:none;border-radius:16px;background:var(--main);color:var(--onmain);font-weight:800;padding:8px 12px;font-size:13px;white-space:nowrap}
+.rx{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center}
+.rx button{border:1.5px solid var(--line2);background:var(--card);border-radius:14px;padding:2px 8px;font-size:13px;color:var(--ink);min-height:28px}
+.rx button.me{border-color:var(--main);background:color-mix(in srgb,var(--main) 12%,transparent)}
+.rx .add{color:var(--mute);font-size:12px}
+.place{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:14px}
+.place a{font-size:12px;font-weight:700;color:var(--main);border:1.5px solid var(--line2);border-radius:12px;padding:4px 10px;text-decoration:none;background:var(--card)}
+.favs{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.favs button{border:1.5px solid var(--line2);background:var(--card);border-radius:16px;padding:6px 12px;font-size:14px;color:var(--ink);font-weight:500}
+.favs button.x{border-color:var(--danger);color:var(--danger)}
+.favs .edit{border:none;background:none;color:var(--main);font-weight:700;font-size:13px;padding:6px 4px}
+.lbl{font-size:12px;font-weight:700;color:var(--mute);margin:2px 2px 6px}
+.twho{border:none;background:none;font-size:12px;color:var(--main);font-weight:700;padding:4px 6px;white-space:nowrap}
+.chips.small{padding:0}.chips.small .chip{height:34px;font-size:13px;padding:0 10px}
 </style>
 </head>
 <body>
@@ -189,14 +204,17 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
 <script>
 (function () {
   'use strict';
-  var APP_VER = '2.2.0';
-  var THEMES = [['dino', '공룡 숲', '#2F7A4A', '#FFF8EC'], ['sea', '바다', '#1F6FA8', '#EEF6FB'], ['berry', '딸기우유', '#C93D6F', '#FFF4F6'], ['night', '밤하늘', '#4FB37C', '#12161E'], ['clean', '깔끔한 흰색', '#2F5DA8', '#F6F7F9']];
+  var APP_VER = '2.3.0';
+  var THEMES = [['auto', '자동(밤엔 어둡게)', '#12161E', '#FFF8EC'], ['dino', '공룡 숲', '#2F7A4A', '#FFF8EC'], ['sea', '바다', '#1F6FA8', '#EEF6FB'], ['berry', '딸기우유', '#C93D6F', '#FFF4F6'], ['night', '밤하늘', '#4FB37C', '#12161E'], ['clean', '깔끔한 흰색', '#2F5DA8', '#F6F7F9']];
+  var darkMq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
   function applyTheme(t) {
     if (!THEMES.some(function (x) { return x[0] === t; })) t = 'dino';
-    document.documentElement.setAttribute('data-theme', t);
-    var m = document.querySelector('meta[name=theme-color]'); if (m) m.setAttribute('content', THEMES.filter(function (x) { return x[0] === t; })[0][2]);
+    var real = t === 'auto' ? (darkMq && darkMq.matches ? 'night' : 'dino') : t;   // 자동: 휴대폰이 다크 모드면 밤하늘
+    document.documentElement.setAttribute('data-theme', real);
+    var m = document.querySelector('meta[name=theme-color]'); if (m) m.setAttribute('content', THEMES.filter(function (x) { return x[0] === real; })[0][2]);
     return t;
   }
+  if (darkMq) { var onDark = function () { if (store('fc_theme') === 'auto') applyTheme('auto'); }; if (darkMq.addEventListener) darkMq.addEventListener('change', onDark); else if (darkMq.addListener) darkMq.addListener(onDark); }
   // 휴대폰 앱(GitHub Pages)에서 쓸 때만: Apps Script 웹 앱 주소(…/exec). Apps Script 안에서 열면 쓰지 않아요.
   var API_URL = window.FAMCAL_API_URL || '';
   var DOW = ['일', '월', '화', '수', '목', '금', '토'];
@@ -465,7 +483,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     function listen() {
       if (started || !onColCb) return; started = true;
       [['events', db.collection('events')], ['comments', db.collection('comments')], ['todos', db.collection('todos')],
-        ['news', db.collection('news').orderBy('at', 'desc').limit(60)]].forEach(function (x) {
+        ['news', db.collection('news').orderBy('at', 'desc').limit(60)], ['favs', db.collection('favs')]].forEach(function (x) {
         unsubs.push(x[1].onSnapshot(function (snap) {
           onColCb(x[0], snap.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; }));
         }, function (err) { stop(); if (onErrCb) onErrCb(err); }));
@@ -490,7 +508,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     if (!S.data) S.data = { members: [], events: [], comments: [], todos: [], news: [], holidays: [] };
     if (col === 'comments') {
       var me = FB.uid();
-      docs = docs.map(function (c) { return { id: c.id, eventId: c.eventId, name: c.name, text: c.text, at: normAt(c.at), mine: !!me && c.uid === me }; });
+      docs = docs.map(function (c) { return { id: c.id, eventId: c.eventId, name: c.name, text: c.text, at: normAt(c.at), mine: !!me && c.uid === me, reacts: c.reacts || {} }; });
     }
     if (col === 'news' || col === 'todos') docs.forEach(function (x) { x.at = normAt(x.at); });
     if (col === 'news') docs = docs.slice().sort(function (a, b) { return a.at < b.at ? -1 : 1; });
@@ -506,6 +524,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
   }
   if (FB) FB.start(fbData, fbErr);
 
+  function todoById(id) { return ((S.data && S.data.todos) || []).filter(function (x) { return x.id === id; })[0]; }
   function evById(id) { return ((S.data && S.data.events) || []).filter(function (e) { return e.id === id; })[0]; }
   var lastNews = null;
   function newsOp(what, title, id) { lastNews = { what: what, title: String(title || '').slice(0, 60), id: String(id || '') }; return ['set', 'news/' + FB.newId(), { at: nowStamp(), who: S.me, what: what, title: String(title || '').slice(0, 120), id: String(id || '') }]; }
@@ -516,6 +535,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
         days: e.days || '', until: e.until || '', skip: e.skip || '', dday: e.dday === 'Y' ? 'Y' : 'N', memo: e.memo || '',
         by: isNew ? S.me : (old.by || ''), at: isNew ? now : (old.at || now), upd: now, updBy: S.me };
       if (e.remind || old.remind) doc.remind = e.remind || '';
+      if (e.place || old.place) doc.place = String(e.place || '').slice(0, 100);
       return FB.batch([['set', 'events/' + id, doc], newsOp(isNew ? '추가' : '수정', e.title, id)]);
     },
     apiDeleteEvent: function (c, d, id) {
@@ -534,12 +554,21 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       return FB.batch([['set', 'comments/' + FB.newId(), { eventId: evId, name: S.me, text: String(text).slice(0, 200), at: nowStamp(), uid: FB.uid() }], newsOp('댓글', ev.title, evId)]);
     },
     apiDeleteComment: function (c, d, id) { return FB.batch([['delete', 'comments/' + id]]); },
-    apiSaveTodo: function (c, d, t) { return FB.batch([['set', 'todos/' + FB.newId(), { kind: t.kind, text: String(t.text).slice(0, 100), who: '', done: false, by: S.me, at: nowStamp() }]]); },
+    apiSaveTodo: function (c, d, t) { return FB.batch([['set', 'todos/' + FB.newId(), { kind: t.kind, text: String(t.text).slice(0, 100), who: t.who || '', done: false, by: S.me, at: nowStamp() }]]); },
     apiToggleTodo: function (c, d, id) {
       var t = ((S.data && S.data.todos) || []).filter(function (x) { return x.id === id; })[0];
       return t ? FB.batch([['update', 'todos/' + id, { done: !t.done }]]) : Promise.resolve();
     },
     apiDeleteTodo: function (c, d, id) { return FB.batch([['delete', 'todos/' + id]]); },
+    todoWho: function (c, d, id, who) { var t = todoById(id); return t ? FB.batch([['update', 'todos/' + id, { who: who }]]) : Promise.resolve(); },
+    react: function (c, d, id, emo) {
+      var cm = ((S.data && S.data.comments) || []).filter(function (x) { return x.id === id; })[0]; if (!cm) return Promise.resolve();
+      var me = FB.uid(), r = JSON.parse(JSON.stringify(cm.reacts || {}));
+      if (r[me] && r[me].e === emo) delete r[me]; else r[me] = { e: emo, n: S.me };
+      return FB.batch([['update', 'comments/' + id, { reacts: r }]]);
+    },
+    favAdd: function (c, d, kind, text) { return FB.batch([['set', 'favs/' + FB.newId(), { kind: kind, text: String(text).slice(0, 30), by: S.me }]]); },
+    favDel: function (c, d, id) { return FB.batch([['delete', 'favs/' + id]]); },
     apiClearDone: function (c, d, kind) {
       var ops = ((S.data && S.data.todos) || []).filter(function (t) { return t.kind === kind && t.done; }).map(function (t) { return ['delete', 'todos/' + t.id]; });
       return ops.length ? FB.batch(ops) : Promise.resolve();
@@ -707,7 +736,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     if (!q) { box.innerHTML = '<div class="empty">' + ic('search', 30, 'var(--mute)') + '제목, 메모, 사람 이름으로 찾을 수 있어요</div>'; return; }
     var ql = q.toLowerCase(), td = today(), y = td.slice(0, 4);
     var list = events().filter(function (e) {
-      return [e.title, e.memo, e.who, whoText(e)].some(function (v) { return String(v || '').toLowerCase().indexOf(ql) >= 0; });
+      return [e.title, e.memo, e.who, whoText(e), e.place].some(function (v) { return String(v || '').toLowerCase().indexOf(ql) >= 0; });
     });
     // 다가오는 일정 먼저(가까운 순), 그다음 지난 일정(최근 순)
     list = list.map(function (e) { var n = nextOcc(e, td); return { e: e, d: n || e.date, up: !!n }; })
@@ -822,18 +851,34 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       '<div style="min-width:0"><h2 class="jua">' + esc(ev.title) + '</h2><span style="font-size:14px;color:var(--sub)">' + (rpt && S.detailDay && occurs(ev, S.detailDay) && S.detailDay !== ev.date ? md(S.detailDay) : md(ev.date)) + (ev.end && ev.end > ev.date ? ' ~ ' + md(ev.end) : '') + ' · ' + hm(ev.time) + (repText(ev) ? ' · ' + esc(repText(ev)) : '') + '</span></div></div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' + who.map(function (w) { return '<span class="pill" style="background:' + mix(colorOf(w), 0.86) + '">' + head(w, 28) + esc(w === '가족' ? '가족 모두' : w) + '</span>'; }).join('') + '</div>' +
       (ev.memo ? '<p class="memo">메모 · ' + esc(ev.memo) + '</p>' : '') +
+      (ev.place ? '<div class="place">📍 <b>' + esc(ev.place) + '</b><a href="https://map.naver.com/p/search/' + encodeURIComponent(ev.place) + '" target="_blank" rel="noopener">네이버 지도</a><a href="https://map.kakao.com/link/search/' + encodeURIComponent(ev.place) + '" target="_blank" rel="noopener">카카오맵</a></div>' : '') +
       (remindText(ev.remind) ? '<span class="bell-on">' + ic('bell', 15, 'var(--main)', 2.2) + remindText(ev.remind) + ' 알림</span>' : '') +
       (ev.by ? '<span style="font-size:12px;color:var(--mute)">등록: ' + esc(ev.by) + '</span>' : '') +
+      '<button class="skipbtn" data-act="copyev">다른 날로 복사</button>' +
       (ev.repeat && ev.repeat !== '안 함' && S.detailDay && occurs(ev, S.detailDay) ? '<button class="skipbtn" data-act="skipone">' + mdShort(S.detailDay) + ' 이 날만 빼기 (나머지 반복은 그대로)</button>' : '') + '</section>' +
       '<div style="display:flex;align-items:center;gap:6px;padding:4px 4px 0">' + ic('bubble', 20, 'var(--ink)', 2) + '<h3 class="jua" style="margin:0;font-size:18px">댓글 ' + cms.length + '</h3></div>';
     if (!cms.length) h += '<div class="empty" style="padding:8px">첫 댓글을 남겨 보세요</div>';
     cms.forEach(function (c) {
-      h += '<div class="cm">' + head(c.name, 38) + '<div style="flex:1;min-width:0"><div class="bub"><div class="h"><b>' + esc(c.name) + '</b><span>' + ago(c.at) + '</span></div><p>' + esc(c.text) + '</p></div>' +
+      h += '<div class="cm">' + head(c.name, 38) + '<div style="flex:1;min-width:0"><div class="bub"><div class="h"><b>' + esc(c.name) + '</b><span>' + ago(c.at) + '</span></div><p>' + esc(c.text) + '</p></div>' + reactBar(c) +
         (c.mine ? '<button class="del" data-delcm="' + esc(c.id) + '">지우기</button>' : '') + '</div></div>';
     });
     h += '</main><div class="cbar"><form id="cform"><label class="sr" for="c_text">댓글 쓰기</label>' +
       '<input id="c_text" maxlength="200" autocomplete="off" placeholder="댓글을 남겨 주세요"><button type="submit" aria-label="댓글 보내기">' + ic('send', 20, 'var(--onmain)', 2.2) + '</button></form></div>';
     return h;
+  }
+
+  var EMOS = ['👍', '❤️', '😂', '😮', '🙏', '👌'];
+  function reactBar(c) {
+    if (!FB || /^tmp/.test(c.id)) return '';
+    var me = FB.uid(), groups = {};
+    Object.keys(c.reacts || {}).forEach(function (u) { var r = c.reacts[u]; if (!r || EMOS.indexOf(r.e) < 0) return; (groups[r.e] = groups[r.e] || []).push({ n: r.n, me: u === me }); });
+    var h = '<div class="rx">' + EMOS.filter(function (e) { return groups[e]; }).map(function (e) {
+      var g = groups[e], mine = g.some(function (x) { return x.me; });
+      return '<button class="' + (mine ? 'me' : '') + '" data-rx="' + esc(c.id) + '|' + e + '" aria-label="' + e + ' ' + esc(g.map(function (x) { return x.n; }).join(', ')) + '">' + e + ' ' + (g.length > 1 ? g.length : esc(g[0].n)) + '</button>';
+    }).join('');
+    if (S.rxOpen === c.id) h += EMOS.map(function (e) { return '<button data-rx="' + esc(c.id) + '|' + e + '" aria-label="' + e + ' 반응">' + e + '</button>'; }).join('');
+    else h += '<button class="add" data-rxopen="' + esc(c.id) + '">😊 반응</button>';
+    return h + '</div>';
   }
 
   function renderEdit() {
@@ -860,6 +905,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       '<div class="f"><span class="lb" id="lb_rm">미리 알림 <em>(알림 켠 가족 폰으로)</em></span><div class="seg" role="group" aria-labelledby="lb_rm" style="grid-template-columns:repeat(3,minmax(0,1fr))">' +
       REMINDS.map(function (r) { var on = (e.remind || '') === r[0]; return '<button type="button" data-rm="' + r[0] + '" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '">' + r[1] + '</button>'; }).join('') + '</div></div>' +
       '<div class="toggle"><div><b id="lb_dd">D-day로 홈에 띄우기</b><small>여행·생일처럼 기다리는 날</small></div><span class="sw"><input type="checkbox" id="f_dday" aria-labelledby="lb_dd"' + (e.dday === 'Y' ? ' checked' : '') + '><span></span></span></div>' +
+      '<div class="f"><label for="f_place">장소 <span style="font-weight:400;color:var(--mute)">(누르면 지도로 찾아요)</span></label><input class="in1" id="f_place" maxlength="100" value="' + esc(e.place || '') + '" placeholder="예: 서울아동병원, 할머니 댁" autocomplete="off"></div>' +
       '<div class="f"><label for="f_memo">메모</label><textarea class="in1" id="f_memo" maxlength="500" placeholder="챙길 것, 장소 등">' + esc(e.memo) + '</textarea></div>' +
       '<button class="btn" type="submit">' + (isNew ? '저장하고 가족에게 공유' : '고친 내용 저장') + '</button>' +
       (isNew ? '' : '<button class="btn ghost" type="button" data-act="delete">이 일정 지우기</button>') +
@@ -910,23 +956,47 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     if (g('f_date')) S.edit.date = g('f_date').value;
     if (g('f_end')) S.edit.end = g('f_end').value;
     if (g('f_until')) S.edit.until = g('f_until').value;
+    if (g('f_place')) S.edit.place = g('f_place').value.trim();
     if (S.edit.date && (!S.edit.end || S.edit.end < S.edit.date)) S.edit.end = S.edit.date;
     if (g('f_time')) S.edit.time = g('f_time').value;
     if (g('f_dday')) S.edit.dday = g('f_dday').checked ? 'Y' : 'N';
     if (g('f_memo')) S.edit.memo = g('f_memo').value;
   }
 
+  // 자주 쓰는 품목: 누르면 바로 추가, '편집'에서 가족이 직접 넣고 빼기
+  function favBox(k) {
+    if (!FB) return '';
+    var favs = ((S.data && S.data.favs) || []).filter(function (f) { return f.kind === k; }).sort(function (a, b) { return a.text < b.text ? -1 : 1; });
+    var h = '<div><div class="lbl">자주 ' + (k === '장보기' ? '사는 것' : '하는 일') + '</div><div class="favs">';
+    if (S.favEdit) {
+      h += favs.map(function (f) { return '<button class="x" data-favdel="' + esc(f.id) + '" aria-label="' + esc(f.text) + ' 빼기">' + esc(f.text) + ' ✕</button>'; }).join('') +
+        '</div><form id="favform" class="todo-add" style="margin-top:8px"><label class="sr" for="fav_text">자주 쓰는 품목 추가</label><input class="in1" id="fav_text" maxlength="30" placeholder="' + (k === '장보기' ? '예: 우유' : '예: 분리수거') + '" autocomplete="off"><button type="submit">추가</button></form>' +
+        '<div style="display:flex;justify-content:flex-end"><button class="twho" data-act="favedit">편집 끝</button></div></div>';
+    } else {
+      h += (favs.length ? favs.map(function (f) { return '<button data-fav="' + esc(f.text) + '">＋ ' + esc(f.text) + '</button>'; }).join('') : '<span style="font-size:13px;color:var(--mute)">아직 없어요.</span>') +
+        '<button class="edit" data-act="favedit">' + (favs.length ? '편집' : '＋ 추가하기') + '</button></div></div>';
+    }
+    return h;
+  }
+
   function renderTodo() {
     var k = S.todoKind;
-    var list = ((S.data && S.data.todos) || []).filter(function (t) { return t.kind === k; })
+    var list = ((S.data && S.data.todos) || []).filter(function (t) { return t.kind === k && (!S.mineOnly || t.who === S.me); })
       .sort(function (a, b) { return (a.done - b.done) || (a.at < b.at ? 1 : -1); });
     return '<header class="top"><div><small>가족이 함께 보는 목록</small><h1 class="jua">할 일 · 장보기</h1></div>' +
-      '<button class="iconbtn" data-act="refresh" aria-label="새로고침">' + ic('refresh', 20) + '</button></header><main style="padding-top:10px">' +
+      (FB ? '' : '<button class="iconbtn" data-act="refresh" aria-label="새로고침">' + ic('refresh', 20) + '</button>') + '</header><main style="padding-top:10px">' +
       '<div class="seg" role="group" aria-label="목록 종류" style="grid-template-columns:repeat(2,minmax(0,1fr))">' +
       ['할 일', '장보기'].map(function (x) { return '<button type="button" data-kind="' + x + '" class="' + (k === x ? 'on' : '') + '" aria-pressed="' + (k === x) + '">' + x + '</button>'; }).join('') + '</div>' +
+      (members().length > 1 ? '<div class="chips small" role="group" aria-label="담당자" style="margin:2px 0 -2px">' +
+        [['', '담당 없음']].concat(members().filter(function (m) { return m.name !== '가족'; }).map(function (m) { return [m.name, m.name]; })).map(function (x) {
+          var on = (S.todoWho || '') === x[0]; return '<button class="chip' + (on ? ' on' : '') + '" data-tw="' + esc(x[0]) + '" aria-pressed="' + on + '">' + (x[0] ? head(x[0], 24) : '') + esc(x[1]) + '</button>';
+        }).join('') + '</div>' : '') +
       '<form class="todo-add" id="todoform"><label class="sr" for="t_text">' + k + ' 추가</label><input class="in1" id="t_text" maxlength="100" placeholder="' + (k === '장보기' ? '예: 우유 2개' : '예: 관리비 납부') + '" autocomplete="off"><button type="submit">추가</button></form>' +
+      favBox(k) +
+      '<div style="display:flex;justify-content:flex-end"><button class="twho" data-act="minetodo">' + (S.mineOnly ? '✓ 내 담당만 보는 중 · 전체 보기' : '내 담당만 보기') + '</button></div>' +
       '<div class="list">' + (list.length ? list.map(function (t) {
-        return '<div class="trow' + (t.done ? ' done' : '') + '"><label><input type="checkbox" data-toggle="' + esc(t.id) + '"' + (t.done ? ' checked' : '') + '><span>' + esc(t.text) + '<small>' + esc(t.by || '') + '</small></span></label>' +
+        return '<div class="trow' + (t.done ? ' done' : '') + '"><label><input type="checkbox" data-toggle="' + esc(t.id) + '"' + (t.done ? ' checked' : '') + '><span>' + esc(t.text) + '<small>' + esc(t.by || '') + (t.who ? ' · <b style="color:var(--main)">' + esc(t.who) + ' 담당</b>' : '') + '</small></span></label>' +
+          (FB ? '<button class="twho" data-twho="' + esc(t.id) + '" aria-label="담당자 바꾸기">담당</button>' : '') +
           '<button class="iconbtn plain" data-deltodo="' + esc(t.id) + '" aria-label="' + esc(t.text) + ' 지우기">' + ic('trash', 20, 'var(--mute)') + '</button></div>';
       }).join('') : emptyBox('목록이 비어 있어요')) + '</div>' +
       (list.some(function (t) { return t.done; }) ? '<button class="btn line" data-act="cleardone">완료한 항목 모두 지우기</button>' : '') +
@@ -1121,7 +1191,18 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       if (wi >= 0) { if (wl.length > 1) wl.splice(wi, 1); else { toast('요일을 하나 이상 골라 주세요.'); return; } } else wl.push(ds.wd);
       S.edit.days = wl.sort().join(','); app.innerHTML = renderEdit(); bindEdit(); return;
     }
-    if (ds.kind) { S.todoKind = ds.kind; render(); return; }
+    if (ds.kind) { S.todoKind = ds.kind; S.favEdit = false; render(); return; }
+    if (ds.tw !== undefined && S.view === 'todo') { S.todoWho = ds.tw; render(true); return; }
+    if (ds.fav) { quick(function (D) { D.todos.push({ id: tmpId(), kind: S.todoKind, text: ds.fav, who: S.todoWho || '', done: false, by: S.me, at: nowStamp() }); }, 'apiSaveTodo', [S.code, S.dev, { kind: S.todoKind, text: ds.fav, who: S.todoWho || '' }]); toast('\'' + ds.fav + '\' 추가했어요'); return; }
+    if (ds.favdel) { quick(function () {}, 'favDel', [S.code, S.dev, ds.favdel]); return; }
+    if (ds.twho) {
+      var tt = todoById(ds.twho); if (!tt) return;
+      var names = [''].concat(members().filter(function (m) { return m.name !== '가족'; }).map(function (m) { return m.name; }));
+      var nx = names[(names.indexOf(tt.who || '') + 1) % names.length];
+      quick(function () {}, 'todoWho', [S.code, S.dev, ds.twho, nx]); toast(nx ? nx + ' 담당으로 바꿨어요' : '담당을 비웠어요'); return;
+    }
+    if (ds.rxopen) { S.rxOpen = ds.rxopen; render(true); return; }
+    if (ds.rx) { var pr = ds.rx.split('|'); S.rxOpen = ''; quick(function () {}, 'react', [S.code, S.dev, pr[0], pr[1]]); return; }
     var tid = ds.toggle || ds.deltodo || ds.delcm;
     if (tid && /^tmp/.test(tid)) { toast('저장 중이에요. 잠시 후 다시 눌러 주세요.'); return; }
     if (ds.toggle) { quick(function (D) { D.todos.forEach(function (t) { if (t.id === ds.toggle) t.done = !t.done; }); }, 'apiToggleTodo', [S.code, S.dev, ds.toggle]); return; }
@@ -1136,6 +1217,15 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
         S.editBack = S.view;
         S.edit = { id: '', title: '', date: S.view === 'cal' ? S.sel : today(), end: '', time: '', who: S.me || '', repeat: '안 함', days: '', until: '', skip: '', dday: 'N', memo: '' };
         S.view = 'edit'; render(); setTimeout(function () { var t = document.getElementById('f_title'); if (t) t.focus(); }, 50); break;
+      case 'copyev':
+        var ec = evById(S.detail);
+        if (ec) {
+          S.edit = { id: '', title: ec.title, date: S.detailDay || ec.date, end: '', time: ec.time || '', who: ec.who, repeat: '안 함', days: '', until: '', skip: '',
+            dday: ec.dday, memo: ec.memo || '', remind: ec.remind || '', place: ec.place || '' };
+          if (ec.end && ec.end > ec.date) S.edit.end = addDays(S.edit.date, diffDays(ec.date, ec.end));
+          S.editBack = S.back || 'home'; S.view = 'edit'; render(); toast('날짜를 바꾸고 저장하면 복사돼요');
+        }
+        break;
       case 'editev':
         var e0 = events().filter(function (x) { return x.id === S.detail; })[0];
         if (e0) { S.editBack = 'detail'; S.edit = JSON.parse(JSON.stringify(e0)); S.view = 'edit'; render(); }
@@ -1152,6 +1242,9 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       case 'news': S.newsBack = S.view === 'news' ? 'home' : S.view; S.newsSeenBefore = seenAt(); markSeen(); S.view = 'news'; render(); break;
       case 'newsback': S.view = S.newsBack || 'home'; render(); break;
       case 'pushon': pushOn(); break;
+      case 'favedit': S.favEdit = !S.favEdit; render(true); if (S.favEdit) { var fi = document.getElementById('fav_text'); if (fi) fi.focus(); } break;
+      case 'minetodo': S.mineOnly = !S.mineOnly; render(true); break;
+      case 'reload': location.reload(); break;
       case 'search': S.searchBack = S.view; S.view = 'search'; app.innerHTML = ''; render(); break;
       case 'searchback': S.view = S.searchBack || 'home'; render(); break;
       case 'brief':
@@ -1224,17 +1317,43 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
         function () { setTimeout(function () { var i2 = document.getElementById('c_text'); if (i2 && !i2.value) i2.value = text; }, 0); });
       return;
     }
+    if (id === 'favform') {
+      ev.preventDefault();
+      var fv = document.getElementById('fav_text'), ft = fv.value.trim();
+      if (!ft) return;
+      if (((S.data && S.data.favs) || []).some(function (f) { return f.kind === S.todoKind && f.text === ft; })) { toast('이미 있어요'); return; }
+      fv.value = '';
+      quick(function () {}, 'favAdd', [S.code, S.dev, S.todoKind, ft]);
+      return;
+    }
     if (id === 'todoform') {
       ev.preventDefault();
       var t = document.getElementById('t_text'), tx = t.value.trim();
       if (!tx) return;
       var tk = S.todoKind;
-      quick(function (D) { D.todos.push({ id: tmpId(), kind: tk, text: tx, who: '', done: false, by: S.me, at: nowStamp() }); }, 'apiSaveTodo', [S.code, S.dev, { kind: tk, text: tx }]);
+      quick(function (D) { D.todos.push({ id: tmpId(), kind: tk, text: tx, who: S.todoWho || '', done: false, by: S.me, at: nowStamp() }); }, 'apiSaveTodo', [S.code, S.dev, { kind: tk, text: tx, who: S.todoWho || '' }]);
       var i2 = document.getElementById('t_text'); if (i2) i2.focus();
     }
   });
 
   // 다시 화면에 돌아오면(1분 지났을 때) 새로 불러오기, 일정 화면을 보고 있으면 30초마다 댓글 새로고침
+  // 새 버전이 오면 위에 띠를 띄워서 한 번 누르면 바로 적용
+  try {
+    if (navigator.serviceWorker) {
+      var hadCtl = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (!hadCtl) { hadCtl = true; return; }
+        if (document.getElementById('upd')) return;
+        var bar = document.createElement('div'); bar.id = 'upd'; bar.className = 'upd'; bar.setAttribute('role', 'status');
+        bar.innerHTML = '새 버전이 준비됐어요<button data-act="reload">지금 적용</button>';
+        document.body.appendChild(bar);
+      });
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible' && navigator.serviceWorker.getRegistration) navigator.serviceWorker.getRegistration().then(function (r) { if (r) r.update(); });
+      });
+    }
+  } catch (e) {}
+
   // 앱을 열면 알림 목록에 쌓인 우리 앱 알림을 지움 → 갤럭시 아이콘 숫자도 함께 사라짐
   function clearNotis() {
     try {
