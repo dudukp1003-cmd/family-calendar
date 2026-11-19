@@ -204,7 +204,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
 <script>
 (function () {
   'use strict';
-  var APP_VER = '2.3.0';
+  var APP_VER = '2.4.0';
   var THEMES = [['auto', '자동(밤엔 어둡게)', '#12161E', '#FFF8EC'], ['dino', '공룡 숲', '#2F7A4A', '#FFF8EC'], ['sea', '바다', '#1F6FA8', '#EEF6FB'], ['berry', '딸기우유', '#C93D6F', '#FFF4F6'], ['night', '밤하늘', '#4FB37C', '#12161E'], ['clean', '깔끔한 흰색', '#2F5DA8', '#F6F7F9']];
   var darkMq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
   function applyTheme(t) {
@@ -1012,6 +1012,8 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     if (Notification.permission === 'denied') return 'denied';
     return store('fc_push') === 'on' && Notification.permission === 'granted' ? 'on' : 'off';
   }
+  var BRIEFS = [['06:00', '아침 6시'], ['06:30', '6시 30분'], ['07:00', '아침 7시'], ['07:30', '7시 30분'], ['08:00', '아침 8시'], ['08:30', '8시 30분'], ['09:00', '아침 9시'], ['E21:00', '전날 밤 9시'], ['N', '안 받기']];
+  function briefNow() { var v = store('fc_brief'); if (v === 'off') return 'N'; return BRIEFS.some(function (b) { return b[0] === v; }) ? v : '07:00'; }
   function pushCard() {
     var st = pushState();
     var msg = {
@@ -1022,7 +1024,9 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       unsupported: '이 브라우저는 알림을 지원하지 않아요. 홈 화면에 추가한 앱으로 열어 주세요.'
     }[st];
     return '<div class="card"><h3 class="jua">휴대폰 알림</h3><p style="margin-bottom:10px">' + msg + '</p>' +
-      (st === 'on' ? '<div class="toggle" style="margin:0 0 10px"><div><b id="lb_br">아침 7시 오늘 일정 브리핑</b><small>그날 내 일정이 있을 때만 와요</small></div><span class="sw"><input type="checkbox" data-act="brief" aria-labelledby="lb_br"' + (store('fc_brief') === 'off' ? '' : ' checked') + '><span></span></span></div>' +
+      (st === 'on' ? '<div class="f" style="margin:0 0 12px"><span class="lb" id="lb_br">일정 브리핑 시간 <em>(내 일정이 있는 날만 와요)</em></span>' +
+        '<div class="seg" role="group" aria-labelledby="lb_br" style="grid-template-columns:repeat(3,minmax(0,1fr))">' +
+        BRIEFS.map(function (b) { var on = briefNow() === b[0]; return '<button type="button" data-brief="' + b[0] + '" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '">' + b[1] + '</button>'; }).join('') + '</div></div>' +
         '<button class="btn line" data-act="pushoff" style="margin:0">이 기기 알림 끄기</button>'
         : st === 'off' || st === 'denied' ? '<button class="btn" data-act="pushon" style="margin:0">알림 켜기</button>' : '') + (st === 'on' && !pushLog.length ? '' : pushDiag()) + '</div>';
   }
@@ -1068,7 +1072,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
         plog(token ? '토큰O' : '토큰X');
         if (!token) throw new Error('알림 정보를 받지 못했어요.');
         return call('apiPushRegister', S.code, S.dev, token);
-      }).then(function () { store('fc_push', 'on'); render(true); toast('알림을 켰어요'); });
+      }).then(function (r) { store('fc_push', 'on'); if (r && r.brief) store('fc_brief', r.brief); render(true); toast('알림을 켰어요'); });
     }).catch(function (e) { plog('오류:' + String((e && (e.code || e.message)) || e).slice(0, 80)); render(true); fail(e && e.message ? e : new Error('알림을 켜지 못했어요.')); });
   }
 
@@ -1201,6 +1205,16 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       var nx = names[(names.indexOf(tt.who || '') + 1) % names.length];
       quick(function () {}, 'todoWho', [S.code, S.dev, ds.twho, nx]); toast(nx ? nx + ' 담당으로 바꿨어요' : '담당을 비웠어요'); return;
     }
+    if (ds.brief) {
+      var bv = ds.brief, before = briefNow();
+      store('fc_brief', bv); render(true);
+      call('apiPushPrefs', S.code, S.dev, { brief: bv }).then(function (r) {
+        store('fc_brief', r.brief); render(true);
+        var lb = BRIEFS.filter(function (b) { return b[0] === r.brief; })[0];
+        toast(r.brief === 'N' ? '브리핑을 껐어요' : r.brief === 'E21:00' ? '전날 밤 9시에 내일 일정을 알려 드려요' : (lb ? lb[1] : '') + '에 오늘 일정을 알려 드려요');
+      }).catch(function (e) { store('fc_brief', before); render(true); fail(e); });
+      return;
+    }
     if (ds.rxopen) { S.rxOpen = ds.rxopen; render(true); return; }
     if (ds.rx) { var pr = ds.rx.split('|'); S.rxOpen = ''; quick(function () {}, 'react', [S.code, S.dev, pr[0], pr[1]]); return; }
     var tid = ds.toggle || ds.deltodo || ds.delcm;
@@ -1247,10 +1261,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       case 'reload': location.reload(); break;
       case 'search': S.searchBack = S.view; S.view = 'search'; app.innerHTML = ''; render(); break;
       case 'searchback': S.view = S.searchBack || 'home'; render(); break;
-      case 'brief':
-        var want = store('fc_brief') === 'off';
-        call('apiPushPrefs', S.code, S.dev, { brief: want }).then(function (r) { store('fc_brief', r.brief ? null : 'off'); render(true); toast(r.brief ? '아침 브리핑을 받아요' : '아침 브리핑을 껐어요'); }).catch(fail);
-        break;
+
       case 'pushoff':
         call('apiPushOff', S.code, S.dev).then(function () {
           store('fc_push', null);
