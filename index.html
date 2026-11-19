@@ -12,7 +12,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <script src="config.js"></script>
-<script>if(window.FAMCAL_FB){["app","auth","firestore"].forEach(function(n){document.write('<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-'+n+'-compat.js"><\/script>')})}</script>
+<script>if(window.FAMCAL_FB){["app","auth","firestore","messaging"].forEach(function(n){document.write('<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-'+n+'-compat.js"><\/script>')})}</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -184,7 +184,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
 <script>
 (function () {
   'use strict';
-  var APP_VER = '2.0.2';
+  var APP_VER = '2.1.0';
   var THEMES = [['dino', '공룡 숲', '#2F7A4A', '#FFF8EC'], ['sea', '바다', '#1F6FA8', '#EEF6FB'], ['berry', '딸기우유', '#C93D6F', '#FFF4F6'], ['night', '밤하늘', '#4FB37C', '#12161E'], ['clean', '깔끔한 흰색', '#2F5DA8', '#F6F7F9']];
   function applyTheme(t) {
     if (!THEMES.some(function (x) { return x[0] === t; })) t = 'dino';
@@ -498,7 +498,8 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
   if (FB) FB.start(fbData, fbErr);
 
   function evById(id) { return ((S.data && S.data.events) || []).filter(function (e) { return e.id === id; })[0]; }
-  function newsOp(what, title, id) { return ['set', 'news/' + FB.newId(), { at: nowStamp(), who: S.me, what: what, title: String(title || '').slice(0, 120), id: String(id || '') }]; }
+  var lastNews = null;
+  function newsOp(what, title, id) { lastNews = { what: what, title: String(title || '').slice(0, 60), id: String(id || '') }; return ['set', 'news/' + FB.newId(), { at: nowStamp(), who: S.me, what: what, title: String(title || '').slice(0, 120), id: String(id || '') }]; }
   var FBOPS = {
     apiSaveEvent: function (c, d, e) {
       var isNew = !e.id, id = e.id || FB.newId(), old = evById(id) || {}, now = nowStamp();
@@ -545,8 +546,12 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     if (FB) {
       // Firebase는 저장하는 순간 내 화면에 먼저 반영하고(실시간 목록), 서버 저장이 끝나면 가족 화면에도 반영돼요
       var p;
+      lastNews = null;
       try { p = FBOPS[fn].apply(null, args); } catch (e) { p = Promise.reject(e); }
+      var nt = lastNews;
       render(true);
+      // 저장이 끝나면 다른 가족 휴대폰에 알림 (일정·댓글만)
+      if (nt) p.then(function () { callQuiet('apiNotify', S.code, S.dev, nt).catch(function () {}); });
       return p.catch(function (e) {
         if (undo) undo();
         render(true);
@@ -668,6 +673,8 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     if (!seenAt()) { var top = news()[0]; store('fc_seen', top ? top.at : '0'); }
     var n = newCount();
     try { if ('setAppBadge' in navigator) { if (n) navigator.setAppBadge(n); else navigator.clearAppBadge(); } } catch (e) {}
+    // 앱이 꺼져 있을 때 알림이 오면 서비스워커가 이 숫자에서 하나씩 올림
+    try { if (navigator.serviceWorker && navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage({ badge: n }); } catch (e) {}
   }
   function markSeen() { var top = news()[0]; if (top) store('fc_seen', top.at); newsBadge(); }
   function renderNews() {
@@ -879,11 +886,47 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       '</main>';
   }
 
+  /* ── 휴대폰 알림 (앱을 꺼도 알림·아이콘 숫자) ── */
+  function pushState() {
+    if (!FB || !window.FAMCAL_VAPID || !('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      var ios = /iPhone|iPad/.test(navigator.userAgent), standalone = window.navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+      return ios && !standalone ? 'ios-browser' : 'unsupported';
+    }
+    if (Notification.permission === 'denied') return 'denied';
+    return store('fc_push') === 'on' && Notification.permission === 'granted' ? 'on' : 'off';
+  }
+  function pushCard() {
+    var st = pushState();
+    var msg = {
+      on: '이 기기에서 알림이 켜져 있어요. 가족이 일정을 바꾸거나 댓글을 달면 앱을 꺼 둬도 알림과 아이콘 숫자가 떠요.',
+      off: '가족이 일정을 바꾸거나 댓글을 달면 카톡처럼 알림과 앱 아이콘 숫자로 알려 줘요.',
+      denied: '알림이 막혀 있어요. 휴대폰 설정 → 알림에서 이 앱(또는 브라우저)의 알림을 허용한 뒤 다시 눌러 주세요.',
+      'ios-browser': '아이폰은 사파리에서 \'홈 화면에 추가\'한 앱으로 열었을 때만 알림을 켤 수 있어요.',
+      unsupported: '이 브라우저는 알림을 지원하지 않아요. 홈 화면에 추가한 앱으로 열어 주세요.'
+    }[st];
+    return '<div class="card"><h3 class="jua">휴대폰 알림</h3><p style="margin-bottom:10px">' + msg + '</p>' +
+      (st === 'on' ? '<button class="btn line" data-act="pushoff" style="margin:0">이 기기 알림 끄기</button>'
+        : st === 'off' || st === 'denied' ? '<button class="btn" data-act="pushon" style="margin:0">알림 켜기</button>' : '') + '</div>';
+  }
+  function pushOn() {
+    if (!window.firebase || !firebase.messaging) { toast('알림 기능을 불러오지 못했어요. 앱을 다시 열어 주세요.'); return; }
+    Notification.requestPermission().then(function (perm) {
+      if (perm !== 'granted') { render(true); toast('알림을 허용해야 켤 수 있어요.'); return; }
+      toast('알림을 켜는 중…');
+      return navigator.serviceWorker.ready.then(function (reg) {
+        return firebase.messaging().getToken({ vapidKey: window.FAMCAL_VAPID, serviceWorkerRegistration: reg });
+      }).then(function (token) {
+        if (!token) throw new Error('알림 정보를 받지 못했어요.');
+        return call('apiPushRegister', S.code, S.dev, token);
+      }).then(function () { store('fc_push', 'on'); render(true); toast('알림을 켰어요'); });
+    }).catch(function (e) { render(true); fail(e && e.message ? e : new Error('알림을 켜지 못했어요.')); });
+  }
+
   function renderSet() {
     return '<header class="top"><div><small>앱 정보와 내 설정</small><h1 class="jua">설정</h1></div></header><main style="padding-top:10px">' +
       '<div class="card" style="display:flex;gap:14px;align-items:center">' + dino(S.me || '가족', 90) +
       '<div style="flex:1;min-width:0"><h3 class="jua" style="margin:0 0 4px">이 기기 · ' + esc(S.me || '-') + '</h3><p>' + esc(uaText()) + '<br>확인 번호 <b>' + tail() + '</b></p></div></div>' +
-      '<button class="btn line" data-act="char">내 캐릭터 바꾸기 (' + esc(charName(kindOf(S.me))) + ')</button>' +
+      '<button class="btn line" data-act="char">내 캐릭터 바꾸기 (' + esc(charName(kindOf(S.me))) + ')</button>' + pushCard() +
       '<div class="card"><h3 class="jua">테마</h3><p style="margin-bottom:10px">이 기기에서만 바뀌어요. 가족마다 다른 테마를 써도 돼요.</p><div class="themes" role="group" aria-label="테마 고르기">' +
       THEMES.map(function (t) { var on = S.theme === t[0]; return '<button type="button" data-theme="' + t[0] + '" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '"><i style="background:linear-gradient(135deg,' + t[3] + ' 50%,' + t[2] + ' 50%)"></i>' + t[1] + '</button>'; }).join('') + '</div></div>' +
       '<div class="card"><h3 class="jua">휴대폰 홈 화면에 추가하기</h3><p><b>아이폰</b>: 사파리 아래쪽 공유 버튼 → \'홈 화면에 추가\'<br><b>갤럭시</b>: 크롬 오른쪽 위 ⋮ → \'홈 화면에 추가\'</p></div>' +
@@ -1027,6 +1070,14 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
         toast(mdShort(sday) + '은(는) 뺐어요'); break;
       case 'news': S.newsBack = S.view === 'news' ? 'home' : S.view; S.newsSeenBefore = seenAt(); markSeen(); S.view = 'news'; render(); break;
       case 'newsback': S.view = S.newsBack || 'home'; render(); break;
+      case 'pushon': pushOn(); break;
+      case 'pushoff':
+        call('apiPushOff', S.code, S.dev).then(function () {
+          store('fc_push', null);
+          try { if (window.firebase && firebase.messaging) firebase.messaging().deleteToken().catch(function () {}); } catch (e) {}
+          render(true); toast('이 기기 알림을 껐어요');
+        }).catch(fail);
+        break;
       case 'char':
         var mm0 = memberOf(S.me);
         S.pick = { kind: kindOf(S.me), color: (mm0 && COLORS.some(function (c) { return c.c === mm0.color.toUpperCase(); })) ? mm0.color.toUpperCase() : COLORS[0].c };

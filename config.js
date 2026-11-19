@@ -9,3 +9,5 @@ window.FAMCAL_FB = {
   messagingSenderId: '1029636276765',
   appId: '1:1029636276765:web:1d464fb4aa3e95c382bcf4'
 };
+// ▼ 휴대폰 알림용 웹 푸시 공개 키
+window.FAMCAL_VAPID = 'BBR7Y2TPr2reKJ5gL9aq0PXS43s3QaVmrMUOl8vdPyvWYxuAKt-5gViZeGk2WV0Ycm0Cy87JaGJ-eeeCDrQGipE';
