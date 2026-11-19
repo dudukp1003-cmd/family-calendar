@@ -1,5 +1,5 @@
 // 우리가족 캘린더 — 앱 화면 파일과 글꼴만 저장해 두는 서비스워커 (일정·가족 정보는 저장하지 않음)
-const CACHE = 'famcal-1.9.3';
+const CACHE = 'famcal-2.0.0';
 const FONTS = 'famcal-fonts-1';
 const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
@@ -17,8 +17,8 @@ self.addEventListener('fetch', (e) => {
   const req = e.request, url = new URL(req.url);
   if (req.method !== 'GET') return;
 
-  // 구글 글꼴: 한 번 받으면 휴대폰에 두고 바로 사용
-  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
+  // 구글 글꼴·Firebase 프로그램 파일: 한 번 받으면 휴대폰에 두고 바로 사용 (버전이 붙은 파일이라 바뀌지 않음)
+  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com' || (url.hostname === 'www.gstatic.com' && url.pathname.indexOf('/firebasejs/') === 0)) {
     e.respondWith(caches.open(FONTS).then((c) => c.match(req).then((hit) => hit || fetch(req).then((res) => { if (res.ok || res.type === 'opaque') c.put(req, res.clone()); return res; }))));
     return;
   }

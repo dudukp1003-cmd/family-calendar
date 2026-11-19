@@ -12,6 +12,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <script src="config.js"></script>
+<script>if(window.FAMCAL_FB){["app","auth","firestore"].forEach(function(n){document.write('<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-'+n+'-compat.js"><\/script>')})}</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -183,7 +184,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
 <script>
 (function () {
   'use strict';
-  var APP_VER = '1.9.3';
+  var APP_VER = '2.0.0';
   var THEMES = [['dino', '공룡 숲', '#2F7A4A', '#FFF8EC'], ['sea', '바다', '#1F6FA8', '#EEF6FB'], ['berry', '딸기우유', '#C93D6F', '#FFF4F6'], ['night', '밤하늘', '#4FB37C', '#12161E'], ['clean', '깔끔한 흰색', '#2F5DA8', '#F6F7F9']];
   function applyTheme(t) {
     if (!THEMES.some(function (x) { return x[0] === t; })) t = 'dino';
@@ -433,6 +434,95 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
   var quietNext = false;
   function callQuiet() { quietNext = true; return call.apply(null, arguments); }
 
+  /* ── Firebase (실시간) ──
+   * config.js에 FAMCAL_FB가 있으면 일정·댓글·할 일은 Firebase에서 실시간으로 주고받고,
+   * Apps Script는 가족 코드·기기 승인 확인과 출입증 발급만 맡아요. 없으면 예전처럼 시트 방식으로 동작해요. */
+  var FB = window.__fbAdapter || (window.FAMCAL_FB && window.firebase ? realFB(window.FAMCAL_FB) : null);
+  function realFB(cfg) {
+    try { firebase.initializeApp(cfg); } catch (e) { return null; }
+    var auth = firebase.auth(), db = firebase.firestore(), unsubs = [], started = false, onColCb = null, onErrCb = null;
+    try { db.enablePersistence({ synchronizeTabs: true }).catch(function () {}); } catch (e) {}
+    function stop() { unsubs.forEach(function (u) { try { u(); } catch (e) {} }); unsubs = []; started = false; }
+    function listen() {
+      if (started || !onColCb) return; started = true;
+      [['events', db.collection('events')], ['comments', db.collection('comments')], ['todos', db.collection('todos')],
+        ['news', db.collection('news').orderBy('at', 'desc').limit(60)]].forEach(function (x) {
+        unsubs.push(x[1].onSnapshot(function (snap) {
+          onColCb(x[0], snap.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; }));
+        }, function (err) { stop(); if (onErrCb) onErrCb(err); }));
+      });
+    }
+    auth.onAuthStateChanged(function (u) { if (u) listen(); else stop(); });
+    return {
+      start: function (onCol, onErr) { onColCb = onCol; onErrCb = onErr; if (auth.currentUser) listen(); },
+      login: function (token) { return auth.signInWithCustomToken(token).then(function () { listen(); }); },
+      uid: function () { return auth.currentUser ? auth.currentUser.uid : (store('fc_uid') || ''); },
+      newId: function () { return db.collection('events').doc().id; },
+      batch: function (ops) {
+        var b = db.batch();
+        ops.forEach(function (o) { var r = db.doc(o[1]); if (o[0] === 'set') b.set(r, o[2]); else if (o[0] === 'update') b.update(r, o[2]); else b['delete'](r); });
+        return b.commit();
+      },
+      signOut: function () { stop(); return auth.signOut().catch(function () {}); }
+    };
+  }
+  var fbSaveT = 0;
+  function fbData(col, docs) {
+    if (!S.data) S.data = { members: [], events: [], comments: [], todos: [], news: [], holidays: [] };
+    if (col === 'comments') {
+      var me = FB.uid();
+      docs = docs.map(function (c) { return { id: c.id, eventId: c.eventId, name: c.name, text: c.text, at: c.at, mine: !!me && c.uid === me }; });
+    }
+    if (col === 'news') docs = docs.slice().sort(function (a, b) { return a.at < b.at ? -1 : 1; });
+    S.data[col] = docs; S.lastLoad = Date.now();
+    clearTimeout(fbSaveT); fbSaveT = setTimeout(function () { store('fc_cache', JSON.stringify(S.data)); }, 800);
+    newsBadge();
+    if (S.code && !S.stage && S.view !== 'edit' && S.view !== 'char' && !typing()) render(true);
+  }
+  function fbErr(err) {
+    // 막힌 기기이거나 출입증이 만료됐으면 서버에 다시 확인
+    if (err && /permission/i.test(err.code || err.message || '')) load(true);
+  }
+  if (FB) FB.start(fbData, fbErr);
+
+  function evById(id) { return ((S.data && S.data.events) || []).filter(function (e) { return e.id === id; })[0]; }
+  function newsOp(what, title, id) { return ['set', 'news/' + FB.newId(), { at: nowStamp(), who: S.me, what: what, title: String(title || '').slice(0, 120), id: String(id || '') }]; }
+  var FBOPS = {
+    apiSaveEvent: function (c, d, e) {
+      var isNew = !e.id, id = e.id || FB.newId(), old = evById(id) || {}, now = nowStamp();
+      var doc = { date: e.date, end: e.end && e.end >= e.date ? e.end : e.date, time: e.time || '', title: e.title, who: e.who, repeat: e.repeat || '안 함',
+        days: e.days || '', until: e.until || '', skip: e.skip || '', dday: e.dday === 'Y' ? 'Y' : 'N', memo: e.memo || '',
+        by: isNew ? S.me : (old.by || ''), at: isNew ? now : (old.at || now), upd: now, updBy: S.me };
+      return FB.batch([['set', 'events/' + id, doc], newsOp(isNew ? '추가' : '수정', e.title, id)]);
+    },
+    apiDeleteEvent: function (c, d, id) {
+      var ev = evById(id) || {};
+      var ops = [['delete', 'events/' + id]].concat(commentsOf(id).map(function (x) { return ['delete', 'comments/' + x.id]; }));
+      ops.push(newsOp('삭제', ev.title, id));
+      return FB.batch(ops);
+    },
+    apiSkipOnce: function (c, d, id, day) {
+      var ev = evById(id) || {}, l = ev.skip ? ev.skip.split(',') : [], i = l.indexOf(day);
+      if (i >= 0) l.splice(i, 1); else l.push(day);
+      return FB.batch([['update', 'events/' + id, { skip: l.slice(-60).join(','), upd: nowStamp(), updBy: S.me }], newsOp(i >= 0 ? '수정' : '건너뜀', (ev.title || '') + ' (' + mdShort(day) + ')', id)]);
+    },
+    apiAddComment: function (c, d, evId, text) {
+      var ev = evById(evId) || {};
+      return FB.batch([['set', 'comments/' + FB.newId(), { eventId: evId, name: S.me, text: String(text).slice(0, 200), at: nowStamp(), uid: FB.uid() }], newsOp('댓글', ev.title, evId)]);
+    },
+    apiDeleteComment: function (c, d, id) { return FB.batch([['delete', 'comments/' + id]]); },
+    apiSaveTodo: function (c, d, t) { return FB.batch([['set', 'todos/' + FB.newId(), { kind: t.kind, text: String(t.text).slice(0, 100), who: '', done: false, by: S.me, at: nowStamp() }]]); },
+    apiToggleTodo: function (c, d, id) {
+      var t = ((S.data && S.data.todos) || []).filter(function (x) { return x.id === id; })[0];
+      return t ? FB.batch([['update', 'todos/' + id, { done: !t.done }]]) : Promise.resolve();
+    },
+    apiDeleteTodo: function (c, d, id) { return FB.batch([['delete', 'todos/' + id]]); },
+    apiClearDone: function (c, d, kind) {
+      var ops = ((S.data && S.data.todos) || []).filter(function (t) { return t.kind === kind && t.done; }).map(function (t) { return ['delete', 'todos/' + t.id]; });
+      return ops.length ? FB.batch(ops) : Promise.resolve();
+    }
+  };
+
   /* ── 빠르게: 누르면 화면부터 바꾸고, 저장은 뒤에서 ── */
   var pending = 0;
   function nowStamp() { var d = new Date(); return today() + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds()); }
@@ -440,6 +530,18 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
   function tmpId() { return 'tmp' + Date.now() + Math.floor(Math.random() * 1000); }
   function typing() { var a = document.activeElement; return a && /^(INPUT|TEXTAREA)$/.test(a.tagName) && a.type !== 'checkbox' && a.value; }
   function quick(change, fn, args, undo) {
+    if (FB) {
+      // Firebase는 저장하는 순간 내 화면에 먼저 반영하고(실시간 목록), 서버 저장이 끝나면 가족 화면에도 반영돼요
+      var p;
+      try { p = FBOPS[fn].apply(null, args); } catch (e) { p = Promise.reject(e); }
+      render(true);
+      return p.catch(function (e) {
+        if (undo) undo();
+        render(true);
+        toast(/permission/i.test((e && (e.code || e.message)) || '') ? '저장 권한이 없어요. 앱을 다시 열어 주세요.' : '저장하지 못했어요. 인터넷 연결을 확인해 주세요.');
+        if (/permission/i.test((e && (e.code || e.message)) || '')) load(true);
+      });
+    }
     var before = JSON.stringify(S.data);
     change(S.data); store('fc_cache', JSON.stringify(S.data)); render(true);
     pending++;
@@ -456,12 +558,24 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     });
   }
   function setData(d) {
+    if (d && d.token && FB) {
+      // 출입증 + 구성원·휴일만 서버에서 받고, 일정·댓글은 Firebase 실시간 목록이 채움
+      var keep = S.data || {};
+      S.data = { me: d.me, appName: d.appName, members: d.members || [], holidays: d.holidays || [], today: d.today,
+        events: keep.events || [], comments: keep.comments || [], todos: keep.todos || [], news: keep.news || [] };
+      S.me = d.me || ''; S.stage = ''; store('fc_uid', d.uid || '');
+      store('fc_cache', JSON.stringify(S.data));
+      FB.login(d.token).catch(function () { toast('실시간 연결에 실패했어요. 잠시 후 다시 열어 주세요.'); });
+      newsBadge();
+      return;
+    }
     S.data = d; S.me = d.me || ''; S.stage = ''; S.lastLoad = Date.now();
     store('fc_cache', JSON.stringify(d));
     newsBadge();
   }
   function forget(keepCode) {
-    S.data = null; S.me = ''; store('fc_cache', null);
+    S.data = null; S.me = ''; store('fc_cache', null); store('fc_uid', null);
+    if (FB) FB.signOut();
     if (!keepCode) { S.code = ''; store('fc_code', null); }
   }
   // 서버가 '코드 틀림/새 기기/승인 대기/막힘'을 알려 주면 화면을 바꿉니다
@@ -481,7 +595,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
   function load(quiet) {
     if (!S.code) return Promise.resolve();
     var c = quiet && S.data ? callQuiet : call;
-    return c('apiLoad', S.code, S.dev).then(function (d) { if (pending) return; setData(d); if (S.view !== 'edit' && !typing()) render(true); })
+    return c(FB ? 'apiToken' : 'apiLoad', S.code, S.dev).then(function (d) { if (pending) return; setData(d); if (S.view !== 'edit' && !typing()) render(true); })
       .catch(function (e) {
         if (authFail(e)) return;
         if (!S.data) render();
@@ -796,7 +910,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       if (!code) { toast('가족 코드를 입력해 주세요.'); return; }
       call('apiCheck', code).then(function (r) {
         S.code = code; store('fc_code', code); S.joinMembers = r.members;
-        return call('apiLoad', code, S.dev).then(function (d) { setData(d); render(); });
+        return call(FB ? 'apiToken' : 'apiLoad', code, S.dev).then(function (d) { setData(d); render(); });
       }).catch(function (e) {
         if (e.kind === 'E_CODE' || e.kind === 'E_LOCK') { toast(e.message); return; }
         fail(e);
@@ -976,7 +1090,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
   // 바뀐 게 있는지 가볍게 확인: 일정(댓글) 화면은 4초, 다른 화면은 20초마다. 바뀌었을 때만 새로 받아 옴
   var lastPing = 0, pinging = false;
   setInterval(function () {
-    if (document.visibilityState !== 'visible' || !S.code || !S.data || pinging || pending || S.view === 'edit') return;
+    if (FB || document.visibilityState !== 'visible' || !S.code || !S.data || pinging || pending || S.view === 'edit') return;
     var gap = S.view === 'detail' ? 4000 : 20000;
     if (Date.now() - lastPing < gap || Date.now() - S.lastLoad < gap) return;
     lastPing = Date.now(); pinging = true;
