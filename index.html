@@ -174,6 +174,11 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
 .hrow .dy{width:44px;text-align:center}.hrow .dy small{display:block;font-size:11px;font-weight:500}.hrow .dy b{font-size:18px;font-family:var(--hfont);font-weight:var(--hweight)}
 .skipbtn{background:transparent;border:2px dashed var(--line2);border-radius:14px;height:44px;font-weight:700;color:var(--mute);width:100%}
 .sub2{font-size:12px;color:var(--mute);margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.sub2 button{border:none;background:none;color:var(--main);font-weight:700;padding:0;font-size:12px}
+.srch{display:flex;gap:8px;align-items:center;padding:6px 16px 4px}
+.srch input{flex:1;height:50px;border-radius:25px;border:2px solid var(--line2);background:var(--card);padding:0 18px;font-size:16px;color:var(--ink);min-width:0}
+.srch input:focus{outline:none;border-color:var(--main)}
+.hit mark{background:color-mix(in srgb,var(--main) 22%,transparent);color:inherit;border-radius:3px;padding:0 1px}
+.bell-on{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:700;color:var(--main)}
 </style>
 </head>
 <body>
@@ -184,7 +189,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
 <script>
 (function () {
   'use strict';
-  var APP_VER = '2.1.3';
+  var APP_VER = '2.2.0';
   var THEMES = [['dino', '공룡 숲', '#2F7A4A', '#FFF8EC'], ['sea', '바다', '#1F6FA8', '#EEF6FB'], ['berry', '딸기우유', '#C93D6F', '#FFF4F6'], ['night', '밤하늘', '#4FB37C', '#12161E'], ['clean', '깔끔한 흰색', '#2F5DA8', '#F6F7F9']];
   function applyTheme(t) {
     if (!THEMES.some(function (x) { return x[0] === t; })) t = 'dino';
@@ -196,6 +201,8 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
   var API_URL = window.FAMCAL_API_URL || '';
   var DOW = ['일', '월', '화', '수', '목', '금', '토'];
   var REPEATS = ['안 함', '매일', '매주', '격주', '매월', '매년'];
+  var REMINDS = [['', '없음'], ['m10', '10분 전'], ['m30', '30분 전'], ['h1', '1시간 전'], ['d1', '전날 20시'], ['am', '당일 8시']];
+  function remindText(k) { var r = REMINDS.filter(function (x) { return x[0] === k; })[0]; return r && k ? r[1] : ''; }
   var S = {
     code: store('fc_code') || '', me: '', dev: devId(),
     data: null, stage: '', joinMembers: [], reqName: '', reqMemo: '', reqKind: 'rex', reqColor: '#3F78E0', pick: null,
@@ -238,6 +245,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     todo: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/>',
     set: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
+    search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',
     left: '<path d="M15 5l-7 7 7 7"/>', right: '<path d="M9 5l7 7-7 7"/>',
     refresh: '<path d="M20 11a8 8 0 0 0-14.6-4.5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.6 4.5L20 16"/><path d="M20 20v-4h-4"/>',
     trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
@@ -489,6 +497,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     S.data[col] = docs; S.lastLoad = Date.now();
     clearTimeout(fbSaveT); fbSaveT = setTimeout(function () { store('fc_cache', JSON.stringify(S.data)); }, 800);
     newsBadge();
+    if (S.view === 'search') { drawHits(); return; }
     if (S.code && !S.stage && S.view !== 'edit' && S.view !== 'char' && !typing()) render(true);
   }
   function fbErr(err) {
@@ -506,6 +515,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       var doc = { date: e.date, end: e.end && e.end >= e.date ? e.end : e.date, time: e.time || '', title: e.title, who: e.who, repeat: e.repeat || '안 함',
         days: e.days || '', until: e.until || '', skip: e.skip || '', dday: e.dday === 'Y' ? 'Y' : 'N', memo: e.memo || '',
         by: isNew ? S.me : (old.by || ''), at: isNew ? now : (old.at || now), upd: now, updBy: S.me };
+      if (e.remind || old.remind) doc.remind = e.remind || '';
       return FB.batch([['set', 'events/' + id, doc], newsOp(isNew ? '추가' : '수정', e.title, id)]);
     },
     apiDeleteEvent: function (c, d, id) {
@@ -636,6 +646,10 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     if (S.view === 'edit') { app.innerHTML = renderEdit(); bindEdit(); window.scrollTo(0, 0); return; }
     if (S.view === 'char') { app.innerHTML = renderChar(); if (!keepScroll) window.scrollTo(0, 0); return; }
     if (S.view === 'news') { app.innerHTML = renderNews(); window.scrollTo(0, 0); return; }
+    if (S.view === 'search') {
+      if (!document.getElementById('q')) { app.innerHTML = renderSearch(); var qi = document.getElementById('q'); qi.value = S.q || ''; qi.focus(); qi.addEventListener('input', function () { S.q = qi.value; drawHits(); }); }
+      drawHits(); return;
+    }
     if (S.view === 'detail') {
       var ev = events().filter(function (x) { return x.id === S.detail; })[0];
       if (!ev) { S.view = S.back || 'home'; return render(); }
@@ -677,6 +691,34 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     try { if (navigator.serviceWorker && navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage({ badge: n }); } catch (e) {}
   }
   function markSeen() { var top = news()[0]; if (top) store('fc_seen', top.at); newsBadge(); }
+  /* ── 일정 검색: 제목·메모·누구 ── */
+  function renderSearch() {
+    return '<div class="subtop"><button data-act="searchback" aria-label="뒤로">' + ic('left', 22, 'var(--ink)', 2.2) + '</button><h1 class="jua">일정 검색</h1><span></span></div>' +
+      '<div class="srch"><label class="sr" for="q">검색어</label><input id="q" type="search" maxlength="40" autocomplete="off" placeholder="예: 소아과, 생일, 여행"></div>' +
+      '<main style="padding-top:8px"><div id="hits"></div></main>';
+  }
+  function hl(t, q) {
+    var x = String(t || ''), i = q ? x.toLowerCase().indexOf(q.toLowerCase()) : -1;
+    return i < 0 ? esc(x) : esc(x.slice(0, i)) + '<mark>' + esc(x.slice(i, i + q.length)) + '</mark>' + esc(x.slice(i + q.length));
+  }
+  function drawHits() {
+    var box = document.getElementById('hits'); if (!box) return;
+    var q = String(S.q || '').trim();
+    if (!q) { box.innerHTML = '<div class="empty">' + ic('search', 30, 'var(--mute)') + '제목, 메모, 사람 이름으로 찾을 수 있어요</div>'; return; }
+    var ql = q.toLowerCase(), td = today(), y = td.slice(0, 4);
+    var list = events().filter(function (e) {
+      return [e.title, e.memo, e.who, whoText(e)].some(function (v) { return String(v || '').toLowerCase().indexOf(ql) >= 0; });
+    });
+    // 다가오는 일정 먼저(가까운 순), 그다음 지난 일정(최근 순)
+    list = list.map(function (e) { var n = nextOcc(e, td); return { e: e, d: n || e.date, up: !!n }; })
+      .sort(function (a, b) { return a.up !== b.up ? (a.up ? -1 : 1) : a.up ? (a.d < b.d ? -1 : 1) : (a.d < b.d ? 1 : -1); }).slice(0, 60);
+    box.innerHTML = '<section class="sec"><h2 class="jua">검색 결과<span>' + list.length + '개</span></h2><div class="list hit">' + (list.length ? list.map(function (x) {
+      var e = x.e, dt = parse(x.d);
+      return '<button class="row" data-ev="' + esc(e.id) + '" data-on="' + x.d + '"><span class="dy"><small>' + (x.d.slice(0, 4) !== y ? x.d.slice(2, 4) + '년 ' : '') + (dt.getMonth() + 1) + '월</small><b>' + dt.getDate() + '</b></span>' + head(lead(e), 38) +
+        '<span class="tx"><b>' + hl(e.title, q) + rangeTag(e) + '</b><small>' + (x.up ? '' : '지난 일정 · ') + hl(whoText(e), q) + (e.memo ? ' · ' + hl(e.memo.slice(0, 30), q) : '') + (repText(e) ? ' · ' + esc(repText(e)) : '') + '</small></span></button>';
+    }).join('') : '<div class="empty">찾는 일정이 없어요</div>') + '</div></section>';
+  }
+
   function renderNews() {
     var seen = S.newsSeenBefore || seenAt(), list = news();
     var VERB = { '추가': '일정을 추가했어요', '수정': '일정을 고쳤어요', '삭제': '일정을 지웠어요', '댓글': '댓글을 달았어요', '건너뜀': '반복 일정에서 하루를 뺐어요' };
@@ -713,7 +755,8 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     var h = '<header class="top"><div><small>' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + DOW[d.getDay()] + '요일 · ' + esc(S.me) + '</small><h1 class="jua">' + esc(S.data.appName || '우리가족 캘린더') + '</h1></div>' +
       '<div style="display:flex;align-items:flex-end;gap:2px;flex:none"><span style="margin-bottom:-4px">' + dino(peek, 58, true) + '</span>' +
       '<button class="iconbtn bell" data-act="news" aria-label="새 소식' + (newCount() ? ' ' + newCount() + '개' : '') + '">' + ic('bell', 20) + (newCount() ? '<span class="bdg">' + newCount() + '</span>' : '') + '</button>' +
-      '<button class="iconbtn" data-act="refresh" aria-label="새로고침">' + ic('refresh', 20) + '</button></div></header>' + chips() + '<main>';
+      '<button class="iconbtn" data-act="search" aria-label="일정 검색">' + ic('search', 20) + '</button>' +
+      (FB ? '' : '<button class="iconbtn" data-act="refresh" aria-label="새로고침">' + ic('refresh', 20) + '</button>') + '</div></header>' + chips() + '<main>';
 
     var dd = events().filter(function (e) { return e.dday === 'Y' && visible(e); })
       .map(function (e) { return { e: e, d: nextOcc(e, td) }; }).filter(function (x) { return x.d; })
@@ -779,6 +822,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       '<div style="min-width:0"><h2 class="jua">' + esc(ev.title) + '</h2><span style="font-size:14px;color:var(--sub)">' + (rpt && S.detailDay && occurs(ev, S.detailDay) && S.detailDay !== ev.date ? md(S.detailDay) : md(ev.date)) + (ev.end && ev.end > ev.date ? ' ~ ' + md(ev.end) : '') + ' · ' + hm(ev.time) + (repText(ev) ? ' · ' + esc(repText(ev)) : '') + '</span></div></div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' + who.map(function (w) { return '<span class="pill" style="background:' + mix(colorOf(w), 0.86) + '">' + head(w, 28) + esc(w === '가족' ? '가족 모두' : w) + '</span>'; }).join('') + '</div>' +
       (ev.memo ? '<p class="memo">메모 · ' + esc(ev.memo) + '</p>' : '') +
+      (remindText(ev.remind) ? '<span class="bell-on">' + ic('bell', 15, 'var(--main)', 2.2) + remindText(ev.remind) + ' 알림</span>' : '') +
       (ev.by ? '<span style="font-size:12px;color:var(--mute)">등록: ' + esc(ev.by) + '</span>' : '') +
       (ev.repeat && ev.repeat !== '안 함' && S.detailDay && occurs(ev, S.detailDay) ? '<button class="skipbtn" data-act="skipone">' + mdShort(S.detailDay) + ' 이 날만 빼기 (나머지 반복은 그대로)</button>' : '') + '</section>' +
       '<div style="display:flex;align-items:center;gap:6px;padding:4px 4px 0">' + ic('bubble', 20, 'var(--ink)', 2) + '<h3 class="jua" style="margin:0;font-size:18px">댓글 ' + cms.length + '</h3></div>';
@@ -813,6 +857,8 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       '</div>' +
       (e.repeat && e.repeat !== '안 함' ? '<div class="f"><label for="f_until">반복 끝나는 날 <span style="font-weight:400;color:var(--mute)">(비우면 계속)</span></label><input class="in1" type="date" id="f_until" value="' + esc(e.until || '') + '"' + (e.date ? ' min="' + esc(e.date) + '"' : '') + '>' +
         (e.skip ? '<div class="sub2">뺀 날 ' + e.skip.split(',').length + '일 (' + esc(e.skip.split(',').slice(-3).map(mdShort).join(', ')) + ')<button type="button" data-act="unskipall">모두 되살리기</button></div>' : '') + '</div>' : '') +
+      '<div class="f"><span class="lb" id="lb_rm">미리 알림 <em>(알림 켠 가족 폰으로)</em></span><div class="seg" role="group" aria-labelledby="lb_rm" style="grid-template-columns:repeat(3,minmax(0,1fr))">' +
+      REMINDS.map(function (r) { var on = (e.remind || '') === r[0]; return '<button type="button" data-rm="' + r[0] + '" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '">' + r[1] + '</button>'; }).join('') + '</div></div>' +
       '<div class="toggle"><div><b id="lb_dd">D-day로 홈에 띄우기</b><small>여행·생일처럼 기다리는 날</small></div><span class="sw"><input type="checkbox" id="f_dday" aria-labelledby="lb_dd"' + (e.dday === 'Y' ? ' checked' : '') + '><span></span></span></div>' +
       '<div class="f"><label for="f_memo">메모</label><textarea class="in1" id="f_memo" maxlength="500" placeholder="챙길 것, 장소 등">' + esc(e.memo) + '</textarea></div>' +
       '<button class="btn" type="submit">' + (isNew ? '저장하고 가족에게 공유' : '고친 내용 저장') + '</button>' +
@@ -838,6 +884,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       if (!e.date) { toast('시작일을 골라 주세요.'); return; }
       if (diffDays(e.date, e.end) > 60) { toast('여러 날 일정은 60일까지 정할 수 있어요.'); return; }
       if (!whoList(e).length) { toast('누구 일정인지 골라 주세요.'); return; }
+      if (/^(m10|m30|h1)$/.test(e.remind || '') && !e.time) { toast('\'' + remindText(e.remind) + '\' 알림은 시간을 정해야 해요. 종일 일정은 전날 20시나 당일 8시를 골라 주세요.'); return; }
       if (e.repeat === '안 함') { e.days = ''; e.until = ''; e.skip = ''; }
       else {
         if (e.repeat !== '매주' && e.repeat !== '격주') e.days = '';
@@ -905,7 +952,8 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       unsupported: '이 브라우저는 알림을 지원하지 않아요. 홈 화면에 추가한 앱으로 열어 주세요.'
     }[st];
     return '<div class="card"><h3 class="jua">휴대폰 알림</h3><p style="margin-bottom:10px">' + msg + '</p>' +
-      (st === 'on' ? '<button class="btn line" data-act="pushoff" style="margin:0">이 기기 알림 끄기</button>'
+      (st === 'on' ? '<div class="toggle" style="margin:0 0 10px"><div><b id="lb_br">아침 7시 오늘 일정 브리핑</b><small>그날 내 일정이 있을 때만 와요</small></div><span class="sw"><input type="checkbox" data-act="brief" aria-labelledby="lb_br"' + (store('fc_brief') === 'off' ? '' : ' checked') + '><span></span></span></div>' +
+        '<button class="btn line" data-act="pushoff" style="margin:0">이 기기 알림 끄기</button>'
         : st === 'off' || st === 'denied' ? '<button class="btn" data-act="pushon" style="margin:0">알림 켜기</button>' : '') + (st === 'on' && !pushLog.length ? '' : pushDiag()) + '</div>';
   }
   // 휴대폰마다 허용 창 방식이 달라서(약속형/예전 콜백형, 조용히 막힘) 모두 처리하고 20초 안에 답이 없으면 안내
@@ -1066,6 +1114,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       if (i >= 0) w.splice(i, 1); else w.push(ds.who);
       S.edit.who = w.join(','); app.innerHTML = renderEdit(); bindEdit(); return;
     }
+    if (ds.rm !== undefined && S.view === 'edit') { keepForm(); S.edit.remind = ds.rm; app.innerHTML = renderEdit(); bindEdit(); return; }
     if (ds.rep) { keepForm(); S.edit.repeat = ds.rep; if ((ds.rep === '매주' || ds.rep === '격주') && !S.edit.days && S.edit.date) S.edit.days = String(parse(S.edit.date).getDay()); app.innerHTML = renderEdit(); bindEdit(); return; }
     if (ds.wd) {
       keepForm(); var wl = wdays(S.edit).map(String), wi = wl.indexOf(ds.wd);
@@ -1103,6 +1152,12 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       case 'news': S.newsBack = S.view === 'news' ? 'home' : S.view; S.newsSeenBefore = seenAt(); markSeen(); S.view = 'news'; render(); break;
       case 'newsback': S.view = S.newsBack || 'home'; render(); break;
       case 'pushon': pushOn(); break;
+      case 'search': S.searchBack = S.view; S.view = 'search'; app.innerHTML = ''; render(); break;
+      case 'searchback': S.view = S.searchBack || 'home'; render(); break;
+      case 'brief':
+        var want = store('fc_brief') === 'off';
+        call('apiPushPrefs', S.code, S.dev, { brief: want }).then(function (r) { store('fc_brief', r.brief ? null : 'off'); render(true); toast(r.brief ? '아침 브리핑을 받아요' : '아침 브리핑을 껐어요'); }).catch(fail);
+        break;
       case 'pushoff':
         call('apiPushOff', S.code, S.dev).then(function () {
           store('fc_push', null);
