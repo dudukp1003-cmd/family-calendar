@@ -194,6 +194,9 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
 .lbl{font-size:12px;font-weight:700;color:var(--mute);margin:2px 2px 6px}
 .twho{border:none;background:none;font-size:12px;color:var(--main);font-weight:700;padding:4px 6px;white-space:nowrap}
 .chips.small{padding:0}.chips.small .chip{height:34px;font-size:13px;padding:0 10px}
+.sel{-webkit-appearance:none;appearance:none;width:100%;height:52px;border-radius:16px;border:2px solid var(--line2);background-color:var(--card);color:var(--ink);font-size:16px;font-weight:600;padding:0 44px 0 16px;font-family:inherit;
+  background-image:linear-gradient(45deg,transparent 50%,var(--mute) 50%),linear-gradient(135deg,var(--mute) 50%,transparent 50%);background-position:calc(100% - 22px) 50%,calc(100% - 16px) 50%;background-size:6px 6px,6px 6px;background-repeat:no-repeat}
+.sel:focus{outline:none;border-color:var(--main)}
 </style>
 </head>
 <body>
@@ -204,7 +207,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
 <script>
 (function () {
   'use strict';
-  var APP_VER = '2.4.0';
+  var APP_VER = '2.4.1';
   var THEMES = [['auto', '자동(밤엔 어둡게)', '#12161E', '#FFF8EC'], ['dino', '공룡 숲', '#2F7A4A', '#FFF8EC'], ['sea', '바다', '#1F6FA8', '#EEF6FB'], ['berry', '딸기우유', '#C93D6F', '#FFF4F6'], ['night', '밤하늘', '#4FB37C', '#12161E'], ['clean', '깔끔한 흰색', '#2F5DA8', '#F6F7F9']];
   var darkMq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
   function applyTheme(t) {
@@ -902,8 +905,8 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       '</div>' +
       (e.repeat && e.repeat !== '안 함' ? '<div class="f"><label for="f_until">반복 끝나는 날 <span style="font-weight:400;color:var(--mute)">(비우면 계속)</span></label><input class="in1" type="date" id="f_until" value="' + esc(e.until || '') + '"' + (e.date ? ' min="' + esc(e.date) + '"' : '') + '>' +
         (e.skip ? '<div class="sub2">뺀 날 ' + e.skip.split(',').length + '일 (' + esc(e.skip.split(',').slice(-3).map(mdShort).join(', ')) + ')<button type="button" data-act="unskipall">모두 되살리기</button></div>' : '') + '</div>' : '') +
-      '<div class="f"><span class="lb" id="lb_rm">미리 알림 <em>(알림 켠 가족 폰으로)</em></span><div class="seg" role="group" aria-labelledby="lb_rm" style="grid-template-columns:repeat(3,minmax(0,1fr))">' +
-      REMINDS.map(function (r) { var on = (e.remind || '') === r[0]; return '<button type="button" data-rm="' + r[0] + '" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '">' + r[1] + '</button>'; }).join('') + '</div></div>' +
+      '<div class="f"><label for="f_remind">미리 알림 <span style="font-weight:400;color:var(--mute)">(알림 켠 가족 폰으로)</span></label><select class="sel" id="f_remind">' +
+      REMINDS.map(function (r) { return '<option value="' + r[0] + '"' + ((e.remind || '') === r[0] ? ' selected' : '') + '>' + r[1] + '</option>'; }).join('') + '</select></div>' +
       '<div class="toggle"><div><b id="lb_dd">D-day로 홈에 띄우기</b><small>여행·생일처럼 기다리는 날</small></div><span class="sw"><input type="checkbox" id="f_dday" aria-labelledby="lb_dd"' + (e.dday === 'Y' ? ' checked' : '') + '><span></span></span></div>' +
       '<div class="f"><label for="f_place">장소 <span style="font-weight:400;color:var(--mute)">(누르면 지도로 찾아요)</span></label><input class="in1" id="f_place" maxlength="100" value="' + esc(e.place || '') + '" placeholder="예: 서울아동병원, 할머니 댁" autocomplete="off"></div>' +
       '<div class="f"><label for="f_memo">메모</label><textarea class="in1" id="f_memo" maxlength="500" placeholder="챙길 것, 장소 등">' + esc(e.memo) + '</textarea></div>' +
@@ -957,6 +960,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     if (g('f_end')) S.edit.end = g('f_end').value;
     if (g('f_until')) S.edit.until = g('f_until').value;
     if (g('f_place')) S.edit.place = g('f_place').value.trim();
+    if (g('f_remind')) S.edit.remind = g('f_remind').value;
     if (S.edit.date && (!S.edit.end || S.edit.end < S.edit.date)) S.edit.end = S.edit.date;
     if (g('f_time')) S.edit.time = g('f_time').value;
     if (g('f_dday')) S.edit.dday = g('f_dday').checked ? 'Y' : 'N';
@@ -1024,9 +1028,8 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       unsupported: '이 브라우저는 알림을 지원하지 않아요. 홈 화면에 추가한 앱으로 열어 주세요.'
     }[st];
     return '<div class="card"><h3 class="jua">휴대폰 알림</h3><p style="margin-bottom:10px">' + msg + '</p>' +
-      (st === 'on' ? '<div class="f" style="margin:0 0 12px"><span class="lb" id="lb_br">일정 브리핑 시간 <em>(내 일정이 있는 날만 와요)</em></span>' +
-        '<div class="seg" role="group" aria-labelledby="lb_br" style="grid-template-columns:repeat(3,minmax(0,1fr))">' +
-        BRIEFS.map(function (b) { var on = briefNow() === b[0]; return '<button type="button" data-brief="' + b[0] + '" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '">' + b[1] + '</button>'; }).join('') + '</div></div>' +
+      (st === 'on' ? '<div class="f" style="margin:0 0 12px"><label for="briefsel">일정 브리핑 시간 <span style="font-weight:400;color:var(--mute)">(내 일정이 있는 날만 와요)</span></label>' +
+        '<select class="sel" id="briefsel">' + BRIEFS.map(function (b) { return '<option value="' + b[0] + '"' + (briefNow() === b[0] ? ' selected' : '') + '>' + b[1] + (b[0] === 'E21:00' ? ' (내일 일정)' : b[0] === 'N' ? '' : ' (오늘 일정)') + '</option>'; }).join('') + '</select></div>' +
         '<button class="btn line" data-act="pushoff" style="margin:0">이 기기 알림 끄기</button>'
         : st === 'off' || st === 'denied' ? '<button class="btn" data-act="pushon" style="margin:0">알림 켜기</button>' : '') + (st === 'on' && !pushLog.length ? '' : pushDiag()) + '</div>';
   }
@@ -1205,16 +1208,6 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       var nx = names[(names.indexOf(tt.who || '') + 1) % names.length];
       quick(function () {}, 'todoWho', [S.code, S.dev, ds.twho, nx]); toast(nx ? nx + ' 담당으로 바꿨어요' : '담당을 비웠어요'); return;
     }
-    if (ds.brief) {
-      var bv = ds.brief, before = briefNow();
-      store('fc_brief', bv); render(true);
-      call('apiPushPrefs', S.code, S.dev, { brief: bv }).then(function (r) {
-        store('fc_brief', r.brief); render(true);
-        var lb = BRIEFS.filter(function (b) { return b[0] === r.brief; })[0];
-        toast(r.brief === 'N' ? '브리핑을 껐어요' : r.brief === 'E21:00' ? '전날 밤 9시에 내일 일정을 알려 드려요' : (lb ? lb[1] : '') + '에 오늘 일정을 알려 드려요');
-      }).catch(function (e) { store('fc_brief', before); render(true); fail(e); });
-      return;
-    }
     if (ds.rxopen) { S.rxOpen = ds.rxopen; render(true); return; }
     if (ds.rx) { var pr = ds.rx.split('|'); S.rxOpen = ''; quick(function () {}, 'react', [S.code, S.dev, pr[0], pr[1]]); return; }
     var tid = ds.toggle || ds.deltodo || ds.delcm;
@@ -1299,6 +1292,18 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
         });
         break;
     }
+  });
+
+  // 콤보박스: 아이폰은 휠에서 '완료'를 누를 때 바뀜 신호가 와요
+  document.addEventListener('change', function (ev) {
+    if (ev.target.id !== 'briefsel') return;
+    var bv = ev.target.value, before = briefNow();
+    store('fc_brief', bv);
+    call('apiPushPrefs', S.code, S.dev, { brief: bv }).then(function (r) {
+      store('fc_brief', r.brief); render(true);
+      var lb = BRIEFS.filter(function (b) { return b[0] === r.brief; })[0];
+      toast(r.brief === 'N' ? '브리핑을 껐어요' : r.brief === 'E21:00' ? '전날 밤 9시에 내일 일정을 알려 드려요' : (lb ? lb[1] : '') + '에 오늘 일정을 알려 드려요');
+    }).catch(function (e) { store('fc_brief', before); render(true); fail(e); });
   });
 
   document.addEventListener('submit', function (ev) {
