@@ -218,7 +218,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
 <script>
 (function () {
   'use strict';
-  var APP_VER = '2.5.0';
+  var APP_VER = '2.6.0';
   var THEMES = [['auto', '자동(밤엔 어둡게)', '#12161E', '#FFF8EC'], ['dino', '공룡 숲', '#2F7A4A', '#FFF8EC'], ['sea', '바다', '#1F6FA8', '#EEF6FB'], ['berry', '딸기우유', '#C93D6F', '#FFF4F6'], ['night', '밤하늘', '#4FB37C', '#12161E'], ['clean', '깔끔한 흰색', '#2F5DA8', '#F6F7F9']];
   var darkMq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
   function applyTheme(t) {
@@ -525,7 +525,10 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     function stop() { unsubs.forEach(function (u) { try { u(); } catch (e) {} }); unsubs = []; started = false; }
     function listen() {
       if (started || !onColCb) return; started = true;
-      [['events', db.collection('events')], ['comments', db.collection('comments')], ['todos', db.collection('todos')],
+      // 오래 써도 빠르게: 반복 일정 + 최근 6개월 일정·댓글만 실시간으로 받고, 그 전 것은 검색·열어 볼 때만 가져옴
+      var cut = keepFrom();
+      [['events:rep', db.collection('events').where('repeat', '!=', '안 함')], ['events:new', db.collection('events').where('end', '>=', cut)],
+        ['comments', db.collection('comments').where('at', '>=', cut + ' 00:00:00')], ['todos', db.collection('todos')],
         ['news', db.collection('news').orderBy('at', 'desc').limit(60)], ['favs', db.collection('favs')]].forEach(function (x) {
         unsubs.push(x[1].onSnapshot(function (snap) {
           onColCb(x[0], snap.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; }));
@@ -543,14 +546,43 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
         ops.forEach(function (o) { var r = db.doc(o[1]); if (o[0] === 'set') b.set(r, o[2]); else if (o[0] === 'update') b.update(r, o[2]); else b['delete'](r); });
         return b.commit();
       },
-      signOut: function () { stop(); return auth.signOut().catch(function () {}); }
+      signOut: function () { stop(); return auth.signOut().catch(function () {}); },
+      fetchOld: function () { return db.collection('events').where('end', '<', keepFrom()).get().then(function (q) { return q.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; }); }); },
+      fetchComments: function (id) { return db.collection('comments').where('eventId', '==', id).get().then(function (q) { return q.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; }); }); }
     };
   }
+  function keepFrom() { return addDays(today(), -180); }
+  var evParts = {}, cmExtra = {}, oldAsked = false, cmAsked = {};
+  function mergeEvents() {
+    var seen = {}, out = [];
+    ['events', 'events:rep', 'events:new', 'events:old'].forEach(function (k) {
+      (evParts[k] || []).forEach(function (e) { if (!seen[e.id]) { seen[e.id] = 1; out.push(e); } });
+    });
+    return out;
+  }
+  // 검색할 때 한 번만: 6개월보다 오래된 일정도 가져와서 같이 찾기
+  function needOld() {
+    if (!FB || oldAsked || !FB.fetchOld) return;
+    oldAsked = true;
+    FB.fetchOld().then(function (docs) { fbData('events:old', docs); }).catch(function () { oldAsked = false; });
+  }
+  // 일정을 열 때 한 번만: 그 일정의 오래된 댓글까지 가져오기
+  function needComments(ev) {
+    if (!FB || !FB.fetchComments || cmAsked[ev.id]) return;
+    if (ev.repeat === '안 함' && (ev.end || ev.date) >= keepFrom()) return;   // 최근 일정 댓글은 이미 다 있음
+    cmAsked[ev.id] = 1;
+    FB.fetchComments(ev.id).then(function (docs) { cmExtra[ev.id] = docs; fbData('comments', null); }).catch(function () { cmAsked[ev.id] = 0; });
+  }
   var fbSaveT = 0;
+  var cmLive = [];
   function fbData(col, docs) {
     if (!S.data) S.data = { members: [], events: [], comments: [], todos: [], news: [], holidays: [] };
+    if (col.indexOf('events') === 0) { evParts[col] = docs; col = 'events'; docs = mergeEvents(); }
     if (col === 'comments') {
       var me = FB.uid();
+      if (docs) cmLive = docs;
+      var seenC = {}; docs = cmLive.concat.apply(cmLive, Object.keys(cmExtra).map(function (k) { return cmExtra[k]; }))
+        .filter(function (c) { if (seenC[c.id]) return false; seenC[c.id] = 1; return true; });
       docs = docs.map(function (c) { return { id: c.id, eventId: c.eventId, name: c.name, text: c.text, at: normAt(c.at), mine: !!me && c.uid === me, reacts: c.reacts || {} }; });
     }
     if (col === 'news' || col === 'todos') docs.forEach(function (x) { x.at = normAt(x.at); });
@@ -580,10 +612,12 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       if (e.remind || old.remind) doc.remind = e.remind || '';
       if (e.place || old.place) doc.place = String(e.place || '').slice(0, 100);
       if (e.cat || old.cat) doc.cat = e.cat || '';
+      if (evParts['events:old']) evParts['events:old'] = evParts['events:old'].map(function (x) { var y = JSON.parse(JSON.stringify(doc)); y.id = id; return x.id === id ? y : x; });
       return FB.batch([['set', 'events/' + id, doc], newsOp(isNew ? '추가' : '수정', e.title, id)]);
     },
     apiDeleteEvent: function (c, d, id) {
       var ev = evById(id) || {};
+      if (evParts['events:old']) evParts['events:old'] = evParts['events:old'].filter(function (x) { return x.id !== id; });
       var ops = [['delete', 'events/' + id]].concat(commentsOf(id).map(function (x) { return ['delete', 'comments/' + x.id]; }));
       ops.push(newsOp('삭제', ev.title, id));
       return FB.batch(ops);
@@ -597,7 +631,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       var ev = evById(evId) || {};
       return FB.batch([['set', 'comments/' + FB.newId(), { eventId: evId, name: S.me, text: String(text).slice(0, 200), at: nowStamp(), uid: FB.uid() }], newsOp('댓글', ev.title, evId)]);
     },
-    apiDeleteComment: function (c, d, id) { return FB.batch([['delete', 'comments/' + id]]); },
+    apiDeleteComment: function (c, d, id) { Object.keys(cmExtra).forEach(function (k) { cmExtra[k] = cmExtra[k].filter(function (x) { return x.id !== id; }); }); return FB.batch([['delete', 'comments/' + id]]); },
     apiSaveTodo: function (c, d, t) { return FB.batch([['set', 'todos/' + FB.newId(), { kind: t.kind, text: String(t.text).slice(0, 100), who: t.who || '', done: false, by: S.me, at: nowStamp() }]]); },
     apiToggleTodo: function (c, d, id) {
       var t = ((S.data && S.data.todos) || []).filter(function (x) { return x.id === id; })[0];
@@ -720,12 +754,14 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     if (S.view === 'char') { app.innerHTML = renderChar(); if (!keepScroll) window.scrollTo(0, 0); return; }
     if (S.view === 'news') { app.innerHTML = renderNews(); window.scrollTo(0, 0); return; }
     if (S.view === 'search') {
+      needOld();
       if (!document.getElementById('q')) { app.innerHTML = renderSearch(); var qi = document.getElementById('q'); qi.value = S.q || ''; qi.focus(); qi.addEventListener('input', function () { S.q = qi.value; drawHits(); }); }
       drawHits(); return;
     }
     if (S.view === 'detail') {
       var ev = events().filter(function (x) { return x.id === S.detail; })[0];
       if (!ev) { S.view = S.back || 'home'; return render(); }
+      needComments(ev);
       app.innerHTML = renderDetail(ev);
       if (S.toBottom) { S.toBottom = false; window.scrollTo(0, document.body.scrollHeight); } else if (!keepScroll) window.scrollTo(0, 0); else window.scrollTo(0, y);
       return;
