@@ -1,5 +1,5 @@
 // 우리가족 캘린더 — 앱 화면 파일만 저장해 두는 서비스워커 (일정·사진·가족 정보는 저장하지 않음)
-const CACHE = 'famcal-1.7.1';
+const CACHE = 'famcal-1.8.0';
 const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
