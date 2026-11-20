@@ -208,6 +208,25 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
 [data-fs=big] header.top .peek{display:none}
 [data-fs=big] header.top h1{font-size:21px;overflow:hidden;text-overflow:ellipsis}
 [data-fs=big] .themes,[data-fs=big] .fonts{grid-template-columns:repeat(2,minmax(0,1fr))}
+.nrow{display:flex;align-items:stretch;border-bottom:2px dashed var(--dash)}.nrow:last-child{border-bottom:none}
+.nrow .news{border-bottom:none;flex:1;min-width:0}
+.nrow .nx{border:none;background:none;color:var(--faint);font-size:18px;padding:0 14px;flex:none}
+.chatcard{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--card);border:2px solid var(--line);border-radius:20px;padding:12px 14px;color:var(--ink)}
+.chatcard .ci{width:42px;height:42px;border-radius:21px;background:var(--yellow);display:flex;align-items:center;justify-content:center;flex:none;color:var(--accInk)}
+.chatcard b{font-size:16px;font-family:var(--hfont);font-weight:var(--hweight)}.chatcard small{display:block;font-size:13px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chatcard .bdg{position:static;flex:none}
+.chat{padding:8px 14px calc(96px + env(safe-area-inset-bottom))}
+.cday{text-align:center;margin:14px 0 6px}.cday span{font-size:12px;color:var(--mute);background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:3px 10px}
+.msg{display:flex;gap:8px;margin:6px 0;align-items:flex-start}
+.msg .who{font-size:12px;color:var(--sub);font-weight:700;margin:0 0 3px 2px}
+.msg .line{display:flex;align-items:flex-end;gap:6px}
+.msg .b{max-width:min(72vw,330px);background:var(--card);border:1.5px solid var(--line);border-radius:4px 16px 16px 16px;padding:8px 12px;font-size:15px;line-height:1.45;white-space:pre-wrap;word-break:break-word;text-align:left;color:var(--ink)}
+.msg.me{justify-content:flex-end}.msg.me .line{flex-direction:row-reverse}
+.msg.me .b{background:var(--yellow);border-color:transparent;color:var(--accInk);border-radius:16px 4px 16px 16px}
+.msg .meta{display:flex;flex-direction:column;align-items:flex-start;font-size:11px;color:var(--mute);white-space:nowrap}.msg.me .meta{align-items:flex-end}
+.unr{color:var(--main);font-weight:800;font-size:12px}
+.msg .del{border:none;background:none;color:var(--danger);font-size:12px;font-weight:700;padding:2px 4px}
+.cm .bub .h .unr{margin-left:6px}
 </style>
 </head>
 <body>
@@ -218,7 +237,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
 <script>
 (function () {
   'use strict';
-  var APP_VER = '2.6.0';
+  var APP_VER = '2.7.0';
   var THEMES = [['auto', '자동(밤엔 어둡게)', '#12161E', '#FFF8EC'], ['dino', '공룡 숲', '#2F7A4A', '#FFF8EC'], ['sea', '바다', '#1F6FA8', '#EEF6FB'], ['berry', '딸기우유', '#C93D6F', '#FFF4F6'], ['night', '밤하늘', '#4FB37C', '#12161E'], ['clean', '깔끔한 흰색', '#2F5DA8', '#F6F7F9']];
   var darkMq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
   function applyTheme(t) {
@@ -529,10 +548,15 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       var cut = keepFrom();
       [['events:rep', db.collection('events').where('repeat', '!=', '안 함')], ['events:new', db.collection('events').where('end', '>=', cut)],
         ['comments', db.collection('comments').where('at', '>=', cut + ' 00:00:00')], ['todos', db.collection('todos')],
-        ['news', db.collection('news').orderBy('at', 'desc').limit(60)], ['favs', db.collection('favs')]].forEach(function (x) {
+        ['news', db.collection('news').orderBy('at', 'desc').limit(60)], ['favs', db.collection('favs')],
+        ['chat', db.collection('chat').orderBy('at', 'desc').limit(200)], ['reads', db.collection('reads')]].forEach(function (x) {
         unsubs.push(x[1].onSnapshot(function (snap) {
-          onColCb(x[0], snap.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; }));
-        }, function (err) { stop(); if (onErrCb) onErrCb(err); }));
+          onColCb(x[0], snap.docs.map(function (d) { var o = d.data(); o._key = d.id; if (!('id' in o)) o.id = d.id; return o; }));
+        }, function (err) {
+          // 채팅·읽음·자주 쓰는 품목은 서버 규칙이 아직 없을 수도 있어서, 그것만 비워 두고 나머지는 계속 실시간 유지
+          if (/^(chat|reads|favs)$/.test(x[0])) { onColCb(x[0], []); return; }
+          stop(); if (onErrCb) onErrCb(err);
+        }));
       });
     }
     auth.onAuthStateChanged(function (u) { if (u) listen(); else stop(); });
@@ -587,10 +611,15 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     }
     if (col === 'news' || col === 'todos') docs.forEach(function (x) { x.at = normAt(x.at); });
     if (col === 'news') docs = docs.slice().sort(function (a, b) { return a.at < b.at ? -1 : 1; });
+    if (col === 'chat') docs = docs.map(function (c) { c.at = normAt(c.at); return c; }).sort(function (a, b) { return a.at < b.at ? -1 : a.at > b.at ? 1 : 0; });
     S.data[col] = docs; S.lastLoad = Date.now();
     clearTimeout(fbSaveT); fbSaveT = setTimeout(function () { store('fc_cache', JSON.stringify(S.data)); }, 800);
     newsBadge();
     if (S.view === 'search') { drawHits(); return; }
+    if (S.pendingOpen && col === 'events' && openTarget(S.pendingOpen)) return;
+    // 채팅·댓글 화면은 입력 중이어도 목록만 새로 그려서 바로 보이게
+    if (S.view === 'chat' && document.getElementById('chatlist')) { drawChat(); return; }
+    if (S.view === 'detail' && document.getElementById('cmlist') && typing()) { drawComments(); return; }
     if (S.code && !S.stage && S.view !== 'edit' && S.view !== 'char' && !typing()) render(true);
   }
   function fbErr(err) {
@@ -647,6 +676,11 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     },
     favAdd: function (c, d, kind, text) { return FB.batch([['set', 'favs/' + FB.newId(), { kind: kind, text: String(text).slice(0, 30), by: S.me }]]); },
     favDel: function (c, d, id) { return FB.batch([['delete', 'favs/' + id]]); },
+    chatSend: function (c, d, text) {
+      lastNews = { what: '채팅', title: String(text).slice(0, 60), id: 'chat' };
+      return FB.batch([['set', 'chat/' + FB.newId(), { name: S.me, uid: FB.uid(), text: String(text).slice(0, 500), at: nowStamp() }]]);
+    },
+    chatDel: function (c, d, id) { return FB.batch([['delete', 'chat/' + id]]); },
     apiClearDone: function (c, d, kind) {
       var ops = ((S.data && S.data.todos) || []).filter(function (t) { return t.kind === kind && t.done; }).map(function (t) { return ['delete', 'todos/' + t.id]; });
       return ops.length ? FB.batch(ops) : Promise.resolve();
@@ -753,6 +787,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     if (S.view === 'edit') { app.innerHTML = renderEdit(); bindEdit(); window.scrollTo(0, 0); return; }
     if (S.view === 'char') { app.innerHTML = renderChar(); if (!keepScroll) window.scrollTo(0, 0); return; }
     if (S.view === 'news') { app.innerHTML = renderNews(); window.scrollTo(0, 0); return; }
+    if (S.view === 'chat') { if (!document.getElementById('chatlist')) { app.innerHTML = renderChat(); S.chatJump = true; } drawChat(); return; }
     if (S.view === 'search') {
       needOld();
       if (!document.getElementById('q')) { app.innerHTML = renderSearch(); var qi = document.getElementById('q'); qi.value = S.q || ''; qi.focus(); qi.addEventListener('input', function () { S.q = qi.value; drawHits(); }); }
@@ -762,7 +797,9 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       var ev = events().filter(function (x) { return x.id === S.detail; })[0];
       if (!ev) { S.view = S.back || 'home'; return render(); }
       needComments(ev);
+      if (typing() && document.getElementById('cmlist')) { drawComments(); return; }
       app.innerHTML = renderDetail(ev);
+      var cl = commentsOf(ev.id); if (cl.length) markRead(ev.id, cl[cl.length - 1].at);
       if (S.toBottom) { S.toBottom = false; window.scrollTo(0, document.body.scrollHeight); } else if (!keepScroll) window.scrollTo(0, 0); else window.scrollTo(0, y);
       return;
     }
@@ -785,12 +822,97 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     }).join('') + '</div></nav>';
   }
 
+  /* ── 읽음 표시 (카톡처럼 안 읽은 사람 수) ──
+   * reads/{내 기기}: { name, seen: { 일정ID 또는 'chat': 마지막으로 본 시각 } } */
+  function readsDocs() { return (S.data && S.data.reads) || []; }
+  function seenBy(name, key) {
+    var t = ''; readsDocs().forEach(function (r) { if (r.name === name && r.seen && r.seen[key] > t) t = r.seen[key]; }); return t;
+  }
+  function mySeen(key) { var me = FB && FB.uid(), r = readsDocs().filter(function (x) { return x.id === me; })[0]; return (r && r.seen && r.seen[key]) || ''; }
+  function unreadCnt(item, key) {
+    if (!FB) return 0;
+    return members().filter(function (m) { return m.name !== '가족' && m.name !== item.name && m.name !== item.who; })
+      .filter(function (m) { return seenBy(m.name, key) < item.at; }).length;
+  }
+  function unrTag(item, key) { var n = unreadCnt(item, key); return n ? '<span class="unr" aria-label="안 읽은 사람 ' + n + '명">' + n + '</span>' : ''; }
+  var readT = 0, readWant = {};
+  function markRead(key, at) {
+    if (!FB || !at || document.visibilityState !== 'visible' || !FB.uid()) return;
+    if ((readWant[key] || mySeen(key)) >= at) return;
+    readWant[key] = at;
+    clearTimeout(readT);
+    readT = setTimeout(function () {
+      var me = FB.uid(), r = readsDocs().filter(function (x) { return x.id === me; })[0], seen = JSON.parse(JSON.stringify((r && r.seen) || {}));
+      Object.keys(readWant).forEach(function (k) { if (!seen[k] || seen[k] < readWant[k]) seen[k] = readWant[k]; });
+      var keys = Object.keys(seen).sort(function (a, b) { return seen[a] < seen[b] ? 1 : -1; });
+      if (keys.length > 200) keys.slice(200).forEach(function (k) { delete seen[k]; });
+      readWant = {};
+      FB.batch([['set', 'reads/' + me, { name: S.me, seen: seen }]]).catch(function () {});
+    }, 700);
+  }
+
+  /* ── 가족 채팅 ── */
+  function chats() { return (S.data && S.data.chat) || []; }
+  function chatUnread() {
+    if (!FB) return 0;
+    var seen = mySeen('chat') || readWant.chat || '';
+    return chats().filter(function (c) { return c.name !== S.me && c.at > seen; }).length;
+  }
+  function chatCard() {
+    if (!FB) return '';
+    var last = chats()[chats().length - 1], n = chatUnread();
+    return '<button class="chatcard" data-act="chat"><span class="ci">' + ic('bubble', 22, 'var(--accInk)', 2.2) + '</span><span style="flex:1;min-width:0"><b>가족 채팅</b><small>' +
+      (last ? esc(last.name) + ': ' + esc(last.text) : '일정과 상관없는 이야기도 여기서 나눠요') + '</small></span>' + (n ? '<span class="bdg">' + (n > 99 ? '99+' : n) + '</span>' : '') + '</button>';
+  }
+  function renderChat() {
+    return '<div class="subtop"><button data-act="chatback" aria-label="뒤로">' + ic('left', 22, 'var(--ink)', 2.2) + '</button><h1 class="jua">가족 채팅</h1><span></span></div>' +
+      '<div class="chat" id="chatlist"></div>' +
+      '<div class="cbar"><form id="chatform"><label class="sr" for="chat_text">메시지</label><input id="chat_text" maxlength="500" autocomplete="off" placeholder="메시지를 입력하세요" enterkeyhint="send">' +
+      '<button type="submit" aria-label="보내기">' + ic('send', 20, 'var(--onmain)', 2.2) + '</button></form></div>';
+  }
+  function drawChat() {
+    var box = document.getElementById('chatlist'); if (!box) return;
+    var nearBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 140;
+    var list = chats(), day = '', h = '';
+    if (!list.length) h = '<div class="empty" style="padding:30px 10px">' + dino(S.me || '가족', 90) + '<br>첫 메시지를 보내 보세요</div>';
+    list.forEach(function (c) {
+      var d = c.at.slice(0, 10);
+      if (d !== day) { day = d; var dt = parse(d); h += '<div class="cday"><span>' + (dt.getMonth() + 1) + '월 ' + dt.getDate() + '일 ' + DOW[dt.getDay()] + '요일</span></div>'; }
+      var me = c.name === S.me, mineDev = !!c.uid && c.uid === FB.uid();   // 내 말풍선은 오른쪽, 지우기는 이 기기에서 쓴 것만
+      var meta = '<span class="meta">' + unrTag(c, 'chat') + '<span>' + esc(c.at.slice(11, 16)) + '</span>' + (mineDev && S.chatSel === c.id ? '<button class="del" data-chatdel="' + esc(c.id) + '">지우기</button>' : '') + '</span>';
+      h += '<div class="msg' + (me ? ' me' : '') + '">' + (me ? '' : head(c.name, 34)) + '<div style="min-width:0">' + (me ? '' : '<div class="who">' + esc(c.name) + '</div>') +
+        '<div class="line"><button class="b"' + (mineDev ? ' data-chatsel="' + esc(c.id) + '"' : '') + '>' + esc(c.text) + '</button>' + meta + '</div></div></div>';
+    });
+    box.innerHTML = h;
+    if (S.chatJump || nearBottom) { S.chatJump = false; window.scrollTo(0, document.body.scrollHeight); }
+    var last = list[list.length - 1]; if (last) markRead('chat', last.at);
+    newsBadge();
+  }
+  // 댓글 목록만 다시 그리기 (입력 중일 때)
+  function drawComments() {
+    var box = document.getElementById('cmlist'); if (!box) return;
+    box.innerHTML = commentsHtml(S.detail);
+    var cms = commentsOf(S.detail); if (cms.length) markRead(S.detail, cms[cms.length - 1].at);
+  }
+
+  /* ── 알림·새 소식을 누르면 해당 화면으로 ── */
+  function openTarget(id) {
+    if (!id) return false;
+    if (!S.code || !S.data) { S.pendingOpen = id; return false; }
+    if (id === 'chat') { S.pendingOpen = ''; S.chatBack = 'home'; S.view = 'chat'; S.chatJump = true; app.innerHTML = ''; render(); return true; }
+    var ev = evById(id);
+    if (!ev) { S.pendingOpen = id; return false; }
+    S.pendingOpen = ''; S.back = 'home'; S.detail = id; S.detailDay = ''; S.view = 'detail'; S.toBottom = commentsOf(id).length > 0; render(); return true;
+  }
+
   /* ── 새 소식: 다른 가족이 일정·댓글을 바꾸면 숫자로 표시 ── */
-  function news() { return ((S.data && S.data.news) || []).slice().reverse(); }
+  function nkey(n) { return n._key || n.nid || (n.at + n.who + n.what + n.id); }
+  function hiddenNews() { try { return JSON.parse(store('fc_hide') || '[]'); } catch (e) { return []; } }
+  function news() { var hid = hiddenNews(); return ((S.data && S.data.news) || []).filter(function (n) { return hid.indexOf(nkey(n)) < 0; }).slice().reverse(); }
   function seenAt() { return store('fc_seen') || ''; }
   function newCount() {
     var seen = seenAt(); if (!seen) return 0;
-    return news().filter(function (n) { return n.at > seen && n.who !== S.me; }).length;
+    return news().filter(function (n) { return n.at > seen && n.who !== S.me; }).length + chatUnread();
   }
   function newsBadge() {
     if (!seenAt()) { var top = news()[0]; store('fc_seen', top ? top.at : '0'); }
@@ -831,12 +953,15 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
   function renderNews() {
     var seen = S.newsSeenBefore || seenAt(), list = news();
     var VERB = { '추가': '일정을 추가했어요', '수정': '일정을 고쳤어요', '삭제': '일정을 지웠어요', '댓글': '댓글을 달았어요', '건너뜀': '반복 일정에서 하루를 뺐어요' };
-    return '<div class="subtop"><button data-act="newsback" aria-label="뒤로">' + ic('left', 22, 'var(--ink)', 2.2) + '</button><h1 class="jua">새 소식</h1><span></span></div><main style="padding-top:8px">' +
+    return '<div class="subtop"><button data-act="newsback" aria-label="뒤로">' + ic('left', 22, 'var(--ink)', 2.2) + '</button><h1 class="jua">새 소식</h1>' +
+      (list.length ? '<button class="twho" data-act="newsclear">전체 지우기</button>' : '<span></span>') + '</div><main style="padding-top:8px">' +
+      (chatUnread() ? '<div style="margin-bottom:10px">' + chatCard() + '</div>' : '') +
       '<div class="list">' + (list.length ? list.slice(0, 40).map(function (n) {
-        var ex = n.id && events().some(function (e) { return e.id === n.id; });
-        return '<button class="news' + (n.at > seen && n.who !== S.me ? ' new' : '') + '"' + (ex ? ' data-ev="' + esc(n.id) + '"' : '') + '>' + head(n.who, 38) +
-          '<span style="flex:1;min-width:0"><b>' + esc(n.who) + '</b>님이 ' + esc(VERB[n.what] || n.what) + '<small>' + esc(n.title) + ' · ' + esc(ago(n.at)) + '</small></span></button>';
-      }).join('') : emptyBox('아직 소식이 없어요')) + '</div></main>' + renderTabs();
+        return '<div class="nrow"><button class="news' + (n.at > seen && n.who !== S.me ? ' new' : '') + '" data-go="' + esc(n.what + '|' + (n.id || '')) + '">' + head(n.who, 38) +
+          '<span style="flex:1;min-width:0"><b>' + esc(n.who) + '</b>님이 ' + esc(VERB[n.what] || n.what) + '<small>' + esc(n.title) + ' · ' + esc(ago(n.at)) + '</small></span></button>' +
+          '<button class="nx" data-hidenews="' + esc(nkey(n)) + '" aria-label="이 소식 지우기">✕</button></div>';
+      }).join('') : emptyBox('아직 소식이 없어요')) + '</div>' +
+      (list.length ? '<p style="font-size:12px;color:var(--mute);text-align:center;margin-top:10px">지운 소식은 이 휴대폰에서만 안 보여요</p>' : '') + '</main>' + renderTabs();
   }
 
   function chips() {
@@ -867,6 +992,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       '<button class="iconbtn" data-act="search" aria-label="일정 검색">' + ic('search', 20) + '</button>' +
       (FB ? '' : '<button class="iconbtn" data-act="refresh" aria-label="새로고침">' + ic('refresh', 20) + '</button>') + '</div></header>' + chips() + '<main>';
 
+    h += chatCard();
     var dd = events().filter(function (e) { return e.dday === 'Y' && visible(e); })
       .map(function (e) { return { e: e, d: nextOcc(e, td) }; }).filter(function (x) { return x.d; })
       .sort(function (a, b) { return a.d < b.d ? -1 : 1; }).slice(0, 2);
@@ -940,16 +1066,21 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       '<button class="skipbtn" data-act="copyev">다른 날로 복사</button>' +
       (ev.repeat && ev.repeat !== '안 함' && S.detailDay && occurs(ev, S.detailDay) ? '<button class="skipbtn" data-act="skipone">' + mdShort(S.detailDay) + ' 이 날만 빼기 (나머지 반복은 그대로)</button>' : '') + '</section>' +
       '<div style="display:flex;align-items:center;gap:6px;padding:4px 4px 0">' + ic('bubble', 20, 'var(--ink)', 2) + '<h3 class="jua" style="margin:0;font-size:18px">댓글 ' + cms.length + '</h3></div>';
-    if (!cms.length) h += '<div class="empty" style="padding:8px">첫 댓글을 남겨 보세요</div>';
-    cms.forEach(function (c) {
-      h += '<div class="cm">' + head(c.name, 38) + '<div style="flex:1;min-width:0"><div class="bub"><div class="h"><b>' + esc(c.name) + '</b><span>' + ago(c.at) + '</span></div><p>' + esc(c.text) + '</p></div>' + reactBar(c) +
-        (c.mine ? '<button class="del" data-delcm="' + esc(c.id) + '">지우기</button>' : '') + '</div></div>';
-    });
+    h += '<div id="cmlist">' + commentsHtml(ev.id) + '</div>';
     h += '</main><div class="cbar"><form id="cform"><label class="sr" for="c_text">댓글 쓰기</label>' +
       '<input id="c_text" maxlength="200" autocomplete="off" placeholder="댓글을 남겨 주세요"><button type="submit" aria-label="댓글 보내기">' + ic('send', 20, 'var(--onmain)', 2.2) + '</button></form></div>';
     return h;
   }
 
+  function commentsHtml(evId) {
+    var cms = commentsOf(evId), h = '';
+    if (!cms.length) return '<div class="empty" style="padding:8px">첫 댓글을 남겨 보세요</div>';
+    cms.forEach(function (c) {
+      h += '<div class="cm">' + head(c.name, 38) + '<div style="flex:1;min-width:0"><div class="bub"><div class="h"><b>' + esc(c.name) + '</b><span>' + unrTag(c, evId) + ' ' + ago(c.at) + '</span></div><p>' + esc(c.text) + '</p></div>' + reactBar(c) +
+        (c.mine ? '<button class="del" data-delcm="' + esc(c.id) + '">지우기</button>' : '') + '</div></div>';
+    });
+    return h;
+  }
   var EMOS = ['👍', '❤️', '😂', '😮', '🙏', '👌'];
   function reactBar(c) {
     if (!FB || /^tmp/.test(c.id)) return '';
@@ -1298,6 +1429,15 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       var nx = names[(names.indexOf(tt.who || '') + 1) % names.length];
       quick(function () {}, 'todoWho', [S.code, S.dev, ds.twho, nx]); toast(nx ? nx + ' 담당으로 바꿨어요' : '담당을 비웠어요'); return;
     }
+    if (ds.hidenews) { var hn2 = hiddenNews(); hn2.push(ds.hidenews); store('fc_hide', JSON.stringify(hn2.slice(-400))); render(true); newsBadge(); return; }
+    if (ds.go !== undefined) {
+      var gp = ds.go.split('|'), gw = gp[0], gid = gp.slice(1).join('|');
+      if (gw === '채팅') { openTarget('chat'); return; }
+      if (gw === '삭제' || !evById(gid)) { toast(gw === '삭제' ? '지워진 일정이에요' : '지난 일정이에요. 🔍 검색에서 찾아 주세요'); return; }
+      S.back = 'news'; S.detail = gid; S.detailDay = ''; S.view = 'detail'; S.toBottom = gw === '댓글'; render(); return;
+    }
+    if (ds.chatsel) { S.chatSel = S.chatSel === ds.chatsel ? '' : ds.chatsel; drawChat(); return; }
+    if (ds.chatdel) { S.chatSel = ''; quick(function () {}, 'chatDel', [S.code, S.dev, ds.chatdel]); return; }
     if (ds.rxopen) { S.rxOpen = ds.rxopen; render(true); return; }
     if (ds.rx) { var pr = ds.rx.split('|'); S.rxOpen = ''; quick(function () {}, 'react', [S.code, S.dev, pr[0], pr[1]]); return; }
     var tid = ds.toggle || ds.deltodo || ds.delcm;
@@ -1339,6 +1479,11 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       case 'news': S.newsBack = S.view === 'news' ? 'home' : S.view; S.newsSeenBefore = seenAt(); markSeen(); S.view = 'news'; render(); break;
       case 'newsback': S.view = S.newsBack || 'home'; render(); break;
       case 'pushon': pushOn(); break;
+      case 'chat': S.chatBack = S.view === 'chat' ? 'home' : S.view; S.view = 'chat'; app.innerHTML = ''; render(); break;
+      case 'chatback': S.view = S.chatBack || 'home'; render(); break;
+      case 'newsclear':
+        if (!confirm('새 소식을 모두 지울까요? (이 휴대폰에서만 지워져요)')) return;
+        var hn3 = hiddenNews(); news().forEach(function (n) { hn3.push(nkey(n)); }); store('fc_hide', JSON.stringify(hn3.slice(-400))); markSeen(); render(true); break;
       case 'favedit': S.favEdit = !S.favEdit; render(true); if (S.favEdit) { var fi = document.getElementById('fav_text'); if (fi) fi.focus(); } break;
       case 'minetodo': S.mineOnly = !S.mineOnly; render(true); break;
       case 'reload': location.reload(); break;
@@ -1424,6 +1569,15 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
         function () { setTimeout(function () { var i2 = document.getElementById('c_text'); if (i2 && !i2.value) i2.value = text; }, 0); });
       return;
     }
+    if (id === 'chatform') {
+      ev.preventDefault();
+      var ci2 = document.getElementById('chat_text'), ct = ci2.value.trim();
+      if (!ct) return;
+      ci2.value = ''; S.chatJump = true;
+      quick(function () {}, 'chatSend', [S.code, S.dev, ct], function () { var i3 = document.getElementById('chat_text'); if (i3 && !i3.value) i3.value = ct; });
+      ci2.focus();
+      return;
+    }
     if (id === 'favform') {
       ev.preventDefault();
       var fv = document.getElementById('fav_text'), ft = fv.value.trim();
@@ -1459,6 +1613,13 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
         if (document.visibilityState === 'visible' && navigator.serviceWorker.getRegistration) navigator.serviceWorker.getRegistration().then(function (r) { if (r) r.update(); });
       });
     }
+  } catch (e) {}
+
+  // 휴대폰 알림을 누르면 그 일정·채팅으로 바로 이동
+  try {
+    var qOpen = new URLSearchParams(location.search).get('open');
+    if (qOpen) { S.pendingOpen = qOpen; history.replaceState(null, '', location.pathname); setTimeout(function () { openTarget(S.pendingOpen); }, 300); }
+    if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', function (e) { if (e.data && e.data.open) openTarget(e.data.open); });
   } catch (e) {}
 
   // 앱을 열면 알림 목록에 쌓인 우리 앱 알림을 지움 → 갤럭시 아이콘 숫자도 함께 사라짐

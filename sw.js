@@ -1,5 +1,5 @@
 // 우리가족 캘린더 — 앱 화면 파일과 글꼴만 저장해 두는 서비스워커 (일정·가족 정보는 저장하지 않음)
-const CACHE = 'famcal-2.6.0';
+const CACHE = 'famcal-2.7.0';
 const FONTS = 'famcal-fonts-1';
 const BADGE = 'famcal-badge';
 const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
@@ -49,7 +49,7 @@ self.addEventListener('push', (e) => {
       self.navigator && self.navigator.setAppBadge ? self.navigator.setAppBadge(n).catch(() => {}) : null,
       self.registration.showNotification(d.title || '우리가족 캘린더', {
         body: d.body || '새 소식이 있어요', icon: './icon-192.png', badge: './icon-192.png',
-        tag: 'famcal-' + (d.id || Date.now()), renotify: true, data: { url: './' }
+        tag: 'famcal-' + (d.id || Date.now()), renotify: true, data: { url: './', id: d.id || '' }
       })
     ]);
   }));
@@ -57,9 +57,13 @@ self.addEventListener('push', (e) => {
 
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
+  // 알림을 누르면 그 일정(또는 채팅) 화면으로 열기
+  const id = (e.notification.data && e.notification.data.id) || '';
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
-    for (const c of list) { if ('focus' in c) return c.focus(); }
-    return self.clients.openWindow('./');
+    for (const c of list) {
+      if ('focus' in c) { if (id) c.postMessage({ open: id }); return c.focus(); }
+    }
+    return self.clients.openWindow(id ? './?open=' + encodeURIComponent(id) : './');
   }));
 });
 
