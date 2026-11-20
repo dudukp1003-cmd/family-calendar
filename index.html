@@ -241,7 +241,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
 <script>
 (function () {
   'use strict';
-  var APP_VER = '2.7.1';
+  var APP_VER = '3.0.0';
   var THEMES = [['auto', '자동(밤엔 어둡게)', '#12161E', '#FFF8EC'], ['dino', '공룡 숲', '#2F7A4A', '#FFF8EC'], ['sea', '바다', '#1F6FA8', '#EEF6FB'], ['berry', '딸기우유', '#C93D6F', '#FFF4F6'], ['night', '밤하늘', '#4FB37C', '#12161E'], ['clean', '깔끔한 흰색', '#2F5DA8', '#F6F7F9']];
   var darkMq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
   function applyTheme(t) {
@@ -544,16 +544,19 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
   function realFB(cfg) {
     try { firebase.initializeApp(cfg); } catch (e) { return null; }
     var auth = firebase.auth(), db = firebase.firestore(), unsubs = [], started = false, onColCb = null, onErrCb = null;
+    // 가족방: 모든 데이터는 rooms/{방 ID}/ 아래 (방은 서버가 출입증과 함께 알려 줌)
+    var room = store('fc_room') || 'home';
+    function P(path) { return 'rooms/' + room + '/' + path; }
     try { db.enablePersistence({ synchronizeTabs: true }).catch(function () {}); } catch (e) {}
     function stop() { unsubs.forEach(function (u) { try { u(); } catch (e) {} }); unsubs = []; started = false; }
     function listen() {
       if (started || !onColCb) return; started = true;
       // 오래 써도 빠르게: 반복 일정 + 최근 6개월 일정·댓글만 실시간으로 받고, 그 전 것은 검색·열어 볼 때만 가져옴
       var cut = keepFrom();
-      [['events:rep', db.collection('events').where('repeat', '!=', '안 함')], ['events:new', db.collection('events').where('end', '>=', cut)],
-        ['comments', db.collection('comments').where('at', '>=', cut + ' 00:00:00')], ['todos', db.collection('todos')],
-        ['news', db.collection('news').orderBy('at', 'desc').limit(60)], ['favs', db.collection('favs')],
-        ['chat', db.collection('chat').orderBy('at', 'desc').limit(200)], ['reads', db.collection('reads')]].forEach(function (x) {
+      [['events:rep', db.collection(P('events')).where('repeat', '!=', '안 함')], ['events:new', db.collection(P('events')).where('end', '>=', cut)],
+        ['comments', db.collection(P('comments')).where('at', '>=', cut + ' 00:00:00')], ['todos', db.collection(P('todos'))],
+        ['news', db.collection(P('news')).orderBy('at', 'desc').limit(60)], ['favs', db.collection(P('favs'))],
+        ['chat', db.collection(P('chat')).orderBy('at', 'desc').limit(200)], ['reads', db.collection(P('reads'))]].forEach(function (x) {
         unsubs.push(x[1].onSnapshot(function (snap) {
           onColCb(x[0], snap.docs.map(function (d) { var o = d.data(); o._key = d.id; if (!('id' in o)) o.id = d.id; return o; }));
         }, function (err) {
@@ -566,17 +569,21 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     auth.onAuthStateChanged(function (u) { if (u) listen(); else stop(); });
     return {
       start: function (onCol, onErr) { onColCb = onCol; onErrCb = onErr; if (auth.currentUser) listen(); },
-      login: function (token) { return auth.signInWithCustomToken(token).then(function () { listen(); }); },
+      login: function (token, rm) {
+        rm = rm || 'home';
+        if (rm !== room) { room = rm; stop(); }   // 다른 방 출입증이면 그 방으로 다시 연결
+        return auth.signInWithCustomToken(token).then(function () { listen(); });
+      },
       uid: function () { return auth.currentUser ? auth.currentUser.uid : (store('fc_uid') || ''); },
-      newId: function () { return db.collection('events').doc().id; },
+      newId: function () { return db.collection(P('events')).doc().id; },
       batch: function (ops) {
         var b = db.batch();
-        ops.forEach(function (o) { var r = db.doc(o[1]); if (o[0] === 'set') b.set(r, o[2]); else if (o[0] === 'update') b.update(r, o[2]); else b['delete'](r); });
+        ops.forEach(function (o) { var r = db.doc(P(o[1])); if (o[0] === 'set') b.set(r, o[2]); else if (o[0] === 'update') b.update(r, o[2]); else b['delete'](r); });
         return b.commit();
       },
       signOut: function () { stop(); return auth.signOut().catch(function () {}); },
-      fetchOld: function () { return db.collection('events').where('end', '<', keepFrom()).get().then(function (q) { return q.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; }); }); },
-      fetchComments: function (id) { return db.collection('comments').where('eventId', '==', id).get().then(function (q) { return q.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; }); }); }
+      fetchOld: function () { return db.collection(P('events')).where('end', '<', keepFrom()).get().then(function (q) { return q.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; }); }); },
+      fetchComments: function (id) { return db.collection(P('comments')).where('eventId', '==', id).get().then(function (q) { return q.docs.map(function (d) { var o = d.data(); o.id = d.id; return o; }); }); }
     };
   }
   function keepFrom() { return addDays(today(), -180); }
@@ -626,9 +633,10 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     if (S.view === 'detail' && document.getElementById('cmlist') && typing()) { drawComments(); return; }
     if (S.code && !S.stage && S.view !== 'edit' && S.view !== 'char' && !typing()) render(true);
   }
+  var fbErrAt = 0;
   function fbErr(err) {
-    // 막힌 기기이거나 출입증이 만료됐으면 서버에 다시 확인
-    if (err && /permission/i.test(err.code || err.message || '')) load(true);
+    // 막힌 기기이거나 출입증이 만료됐으면 서버에 다시 확인 (1분에 한 번까지만)
+    if (err && /permission/i.test(err.code || err.message || '') && Date.now() - fbErrAt > 60000) { fbErrAt = Date.now(); load(true); }
   }
   if (FB) FB.start(fbData, fbErr);
 
@@ -737,7 +745,8 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
         events: keep.events || [], comments: keep.comments || [], todos: keep.todos || [], news: keep.news || [] };
       S.me = d.me || ''; S.stage = ''; store('fc_uid', d.uid || '');
       store('fc_cache', JSON.stringify(S.data));
-      FB.login(d.token).catch(function () { toast('실시간 연결에 실패했어요. 잠시 후 다시 열어 주세요.'); });
+      store('fc_room', d.room || 'home');
+      FB.login(d.token, d.room || 'home').catch(function () { toast('실시간 연결에 실패했어요. 잠시 후 다시 열어 주세요.'); });
       newsBadge();
       return;
     }
@@ -747,7 +756,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     newsBadge();
   }
   function forget(keepCode) {
-    S.data = null; S.me = ''; store('fc_cache', null); store('fc_uid', null);
+    S.data = null; S.me = ''; store('fc_cache', null); store('fc_uid', null); store('fc_room', null);
     if (FB) FB.signOut();
     if (!keepCode) { S.code = ''; store('fc_code', null); }
   }
