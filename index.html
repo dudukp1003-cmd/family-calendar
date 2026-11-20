@@ -215,7 +215,11 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
 .chatcard .ci{width:42px;height:42px;border-radius:21px;background:var(--yellow);display:flex;align-items:center;justify-content:center;flex:none;color:var(--accInk)}
 .chatcard b{font-size:16px;font-family:var(--hfont);font-weight:var(--hweight)}.chatcard small{display:block;font-size:13px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chatcard .bdg{position:static;flex:none}
-.chat{padding:8px 14px calc(96px + env(safe-area-inset-bottom))}
+.chatwrap{position:fixed;left:0;right:0;top:0;height:100vh;height:100dvh;max-width:520px;margin:0 auto;display:flex;flex-direction:column;background:var(--bg);z-index:5;padding-top:env(safe-area-inset-top);box-sizing:border-box}
+.chatwrap .subtop{flex:none}
+.chat{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:4px 14px 12px;display:flex;flex-direction:column}
+.chat .chatin{margin-top:auto}
+.chatwrap .cbar{position:static;flex:none}
 .cday{text-align:center;margin:14px 0 6px}.cday span{font-size:12px;color:var(--mute);background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:3px 10px}
 .msg{display:flex;gap:8px;margin:6px 0;align-items:flex-start}
 .msg .who{font-size:12px;color:var(--sub);font-weight:700;margin:0 0 3px 2px}
@@ -237,7 +241,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
 <script>
 (function () {
   'use strict';
-  var APP_VER = '2.7.0';
+  var APP_VER = '2.7.1';
   var THEMES = [['auto', '자동(밤엔 어둡게)', '#12161E', '#FFF8EC'], ['dino', '공룡 숲', '#2F7A4A', '#FFF8EC'], ['sea', '바다', '#1F6FA8', '#EEF6FB'], ['berry', '딸기우유', '#C93D6F', '#FFF4F6'], ['night', '밤하늘', '#4FB37C', '#12161E'], ['clean', '깔끔한 흰색', '#2F5DA8', '#F6F7F9']];
   var darkMq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
   function applyTheme(t) {
@@ -865,14 +869,25 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       (last ? esc(last.name) + ': ' + esc(last.text) : '일정과 상관없는 이야기도 여기서 나눠요') + '</small></span>' + (n ? '<span class="bdg">' + (n > 99 ? '99+' : n) + '</span>' : '') + '</button>';
   }
   function renderChat() {
-    return '<div class="subtop"><button data-act="chatback" aria-label="뒤로">' + ic('left', 22, 'var(--ink)', 2.2) + '</button><h1 class="jua">가족 채팅</h1><span></span></div>' +
+    // 화면 높이에 딱 맞춘 채팅창: 대화는 가운데 칸 안에서만 움직이고, 입력칸은 늘 아래(키보드 위)에 붙어 있음
+    return '<div class="chatwrap" id="chatwrap"><div class="subtop"><button data-act="chatback" aria-label="뒤로">' + ic('left', 22, 'var(--ink)', 2.2) + '</button><h1 class="jua">가족 채팅</h1><span></span></div>' +
       '<div class="chat" id="chatlist"></div>' +
       '<div class="cbar"><form id="chatform"><label class="sr" for="chat_text">메시지</label><input id="chat_text" maxlength="500" autocomplete="off" placeholder="메시지를 입력하세요" enterkeyhint="send">' +
-      '<button type="submit" aria-label="보내기">' + ic('send', 20, 'var(--onmain)', 2.2) + '</button></form></div>';
+      '<button type="submit" aria-label="보내기">' + ic('send', 20, 'var(--onmain)', 2.2) + '</button></form></div></div>';
   }
+  // 키보드가 올라오면 보이는 화면 높이에 맞춰 채팅창을 줄이고, 마지막 대화가 입력칸 바로 위에 오게
+  function fitChat() {
+    var w = document.getElementById('chatwrap'), vv = window.visualViewport; if (!w) return;
+    var box = document.getElementById('chatlist'), atEnd = box && box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+    if (vv) { w.style.height = vv.height + 'px'; w.style.top = vv.offsetTop + 'px'; }
+    window.scrollTo(0, 0);
+    if (box && atEnd) box.scrollTop = box.scrollHeight;
+  }
+  if (window.visualViewport) { visualViewport.addEventListener('resize', fitChat); visualViewport.addEventListener('scroll', fitChat); }
+  document.addEventListener('focusin', function (e) { if (e.target && e.target.id === 'chat_text') setTimeout(function () { fitChat(); var b = document.getElementById('chatlist'); if (b) b.scrollTop = b.scrollHeight; }, 250); });
   function drawChat() {
     var box = document.getElementById('chatlist'); if (!box) return;
-    var nearBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 140;
+    var nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 140;
     var list = chats(), day = '', h = '';
     if (!list.length) h = '<div class="empty" style="padding:30px 10px">' + dino(S.me || '가족', 90) + '<br>첫 메시지를 보내 보세요</div>';
     list.forEach(function (c) {
@@ -883,8 +898,9 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       h += '<div class="msg' + (me ? ' me' : '') + '">' + (me ? '' : head(c.name, 34)) + '<div style="min-width:0">' + (me ? '' : '<div class="who">' + esc(c.name) + '</div>') +
         '<div class="line"><button class="b"' + (mineDev ? ' data-chatsel="' + esc(c.id) + '"' : '') + '>' + esc(c.text) + '</button>' + meta + '</div></div></div>';
     });
-    box.innerHTML = h;
-    if (S.chatJump || nearBottom) { S.chatJump = false; window.scrollTo(0, document.body.scrollHeight); }
+    box.innerHTML = '<div class="chatin">' + h + '</div>';
+    if (S.chatJump || nearBottom) { S.chatJump = false; box.scrollTop = box.scrollHeight; }
+    fitChat();
     var last = list[list.length - 1]; if (last) markRead('chat', last.at);
     newsBadge();
   }
