@@ -241,7 +241,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
 <script>
 (function () {
   'use strict';
-  var APP_VER = '3.0.0';
+  var APP_VER = '3.0.1';
   var THEMES = [['auto', '자동(밤엔 어둡게)', '#12161E', '#FFF8EC'], ['dino', '공룡 숲', '#2F7A4A', '#FFF8EC'], ['sea', '바다', '#1F6FA8', '#EEF6FB'], ['berry', '딸기우유', '#C93D6F', '#FFF4F6'], ['night', '밤하늘', '#4FB37C', '#12161E'], ['clean', '깔끔한 흰색', '#2F5DA8', '#F6F7F9']];
   var darkMq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
   function applyTheme(t) {
@@ -742,7 +742,8 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       // 출입증 + 구성원·휴일만 서버에서 받고, 일정·댓글은 Firebase 실시간 목록이 채움
       var keep = S.data || {};
       S.data = { me: d.me, appName: d.appName, members: d.members || [], holidays: d.holidays || [], today: d.today,
-        events: keep.events || [], comments: keep.comments || [], todos: keep.todos || [], news: keep.news || [] };
+        events: keep.events || [], comments: keep.comments || [], todos: keep.todos || [], news: keep.news || [],
+        chat: keep.chat || [], reads: keep.reads || [], favs: keep.favs || [] };   // 실시간 목록(채팅·읽음·자주 쓰는 품목)도 그대로 유지
       S.me = d.me || ''; S.stage = ''; store('fc_uid', d.uid || '');
       store('fc_cache', JSON.stringify(S.data));
       store('fc_room', d.room || 'home');
