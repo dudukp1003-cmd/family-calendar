@@ -123,6 +123,9 @@ textarea.in1{height:84px;padding:12px 14px;resize:none}
 .billsum .bs-top b{font-size:24px;color:var(--ink);font-family:var(--hfont);font-weight:var(--hweight)}
 .billsum .bar{height:10px;border-radius:5px;background:var(--line);margin:10px 0 8px;overflow:hidden}.billsum .bar i{display:block;height:100%;background:var(--main);border-radius:5px}
 .billsum .bs-row{display:flex;justify-content:space-between;font-size:13px;color:var(--mute)}.billsum .bs-row b{color:var(--ink)}.billsum .bs-row b.rem{color:#D9534F}
+.billsum .bs-parts{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;padding-top:10px;border-top:2px dashed var(--dash);font-size:13px;color:var(--mute)}.billsum .bs-parts span{display:flex;align-items:center;gap:4px}.billsum .bs-parts b{color:var(--ink)}
+.billsum .bs-all{margin-top:10px;padding-top:10px;border-top:2px dashed var(--dash);font-size:13px;color:var(--mute);display:flex;justify-content:space-between}.billsum .bs-all b{color:var(--ink)}
+.billform select#b_who{flex:1}
 .billform{display:flex;flex-direction:column;gap:8px}.billform .brow{display:flex;gap:8px}
 .billform .amt{flex:1.2;position:relative;min-width:0}.billform .amt input{width:100%;padding-right:30px;box-sizing:border-box}.billform .amt span{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--mute);font-size:14px}
 .billform select{flex:1;min-width:0}.billform button[type=submit]{width:64px;flex:none;border-radius:18px;border:none;background:var(--main);color:var(--onmain);font-weight:700}
@@ -250,7 +253,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
 <script>
 (function () {
   'use strict';
-  var APP_VER = '3.0.2';
+  var APP_VER = '3.0.3';
   var THEMES = [['auto', '자동(밤엔 어둡게)', '#12161E', '#FFF8EC'], ['dino', '공룡 숲', '#2F7A4A', '#FFF8EC'], ['sea', '바다', '#1F6FA8', '#EEF6FB'], ['berry', '딸기우유', '#C93D6F', '#FFF4F6'], ['night', '밤하늘', '#4FB37C', '#12161E'], ['clean', '깔끔한 흰색', '#2F5DA8', '#F6F7F9']];
   var darkMq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
   function applyTheme(t) {
@@ -704,7 +707,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     chatDel: function (c, d, id) { return FB.batch([['delete', 'chat/' + id]]); },
     // 고정비: 이름·금액·매달 납부일, paid = 마지막으로 낸 달(YYYY-MM) → 달이 바뀌면 저절로 '안 냄'
     billSave: function (c, d, b) {
-      var doc = { name: String(b.name).slice(0, 40), amount: Math.max(0, Math.min(99999999, Math.round(+b.amount || 0))), day: Math.max(1, Math.min(31, +b.day || 1)), paid: b.paid || '', by: b.by || S.me, at: b.at || nowStamp() };
+      var doc = { name: String(b.name).slice(0, 40), amount: Math.max(0, Math.min(99999999, Math.round(+b.amount || 0))), day: Math.max(1, Math.min(31, +b.day || 1)), who: String(b.who || '').slice(0, 20), paid: b.paid || '', by: b.by || S.me, at: b.at || nowStamp() };
       return FB.batch([['set', 'bills/' + (b.id || FB.newId()), doc]]);
     },
     billPaid: function (c, d, id) { var b = billById(id); return b ? FB.batch([['update', 'bills/' + id, { paid: b.paid === thisMonth() ? '' : thisMonth() }]]) : Promise.resolve(); },
@@ -1254,26 +1257,37 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
     if (d === 0) return ['오늘', 'today'];
     return ['D-' + d, d <= 3 ? 'soon' : ''];
   }
+  function billPeople() { return members().filter(function (m) { return m.name !== '가족'; }).map(function (m) { return m.name; }); }
   function renderBills() {
-    var l = bills(), tot = 0, paid = 0, ed = S.billEdit ? billById(S.billEdit) || {} : null;
-    l.forEach(function (b) { tot += b.amount || 0; if (b.paid === thisMonth()) paid += b.amount || 0; });
-    var mo = +thisMonth().slice(5), pct = tot ? Math.round(paid / tot * 100) : 0;
+    var all = bills(), f = S.billWho || '*', ed = S.billEdit ? billById(S.billEdit) || {} : null, mm = thisMonth();
+    var l = all.filter(function (b) { return f === '*' || (b.who || '') === f; });
+    function sum(a, onlyPaid) { return a.reduce(function (n, b) { return n + (!onlyPaid || b.paid === mm ? b.amount || 0 : 0); }, 0); }
+    var tot = sum(l), paid = sum(l, true), allTot = sum(all), mo = +mm.slice(5), pct = tot ? Math.round(paid / tot * 100) : 0;
+    var people = billPeople(), groups = [['', '공용']].concat(people.map(function (n) { return [n, n]; }));
+    // 사람별 합계(전체 보기일 때만)
+    var parts = groups.map(function (g) { var a = all.filter(function (b) { return (b.who || '') === g[0]; }); return a.length ? '<span>' + (g[0] ? head(g[0], 18) : '') + esc(g[1]) + ' <b>' + won(sum(a)) + '</b></span>' : ''; }).join('');
     var days = ''; for (var i = 1; i <= 31; i++) days += '<option value="' + i + '"' + ((ed ? ed.day : 25) === i ? ' selected' : '') + '>' + (i === 31 ? '말일' : '매달 ' + i + '일') + '</option>';
-    return '<div class="card billsum"><div class="bs-top"><span>' + mo + '월 고정비</span><b>' + won(tot) + '</b></div>' +
+    var whoNow = ed ? (ed.who || '') : (f === '*' ? '' : f);
+    var whoSel = '<select class="in1" id="b_who" aria-label="누구 것">' + groups.map(function (g) { return '<option value="' + esc(g[0]) + '"' + (whoNow === g[0] ? ' selected' : '') + '>' + esc(g[1]) + '</option>'; }).join('') + '</select>';
+    var chips = people.length ? '<div class="chips small" role="group" aria-label="누구 것" style="margin:2px 0 -2px">' + [['*', '전체']].concat(groups).map(function (g) {
+      var on = f === g[0]; return '<button class="chip' + (on ? ' on' : '') + '" data-bw="' + esc(g[0]) + '" aria-pressed="' + on + '">' + (g[0] && g[0] !== '*' ? head(g[0], 24) : '') + esc(g[1]) + '</button>';
+    }).join('') + '</div>' : '';
+    return chips + '<div class="card billsum"><div class="bs-top"><span>' + mo + '월 ' + (f === '*' ? '전체 ' : esc(f || '공용') + ' ') + '고정비</span><b>' + won(tot) + '</b></div>' +
       '<div class="bar"><i style="width:' + pct + '%"></i></div>' +
-      '<div class="bs-row"><span>낸 것 <b>' + won(paid) + '</b></span><span>남은 것 <b class="' + (tot - paid ? 'rem' : '') + '">' + won(tot - paid) + '</b></span></div></div>' +
+      '<div class="bs-row"><span>낸 것 <b>' + won(paid) + '</b></span><span>남은 것 <b class="' + (tot - paid ? 'rem' : '') + '">' + won(tot - paid) + '</b></span></div>' +
+      (f === '*' ? (parts && people.length ? '<div class="bs-parts">' + parts + '</div>' : '') : '<div class="bs-all">우리 집 전체 합계 <b>' + won(allTot) + '</b></div>') + '</div>' +
       '<form class="billform" id="billform"><input class="in1" id="b_name" maxlength="40" placeholder="이름 (예: 관리비)" autocomplete="off" value="' + esc(ed ? ed.name : '') + '">' +
       '<div class="brow"><div class="amt"><input class="in1" id="b_amt" inputmode="numeric" placeholder="금액" autocomplete="off" value="' + (ed ? esc(String(ed.amount)) : '') + '"><span>원</span></div>' +
-      '<select class="in1" id="b_day" aria-label="납부일">' + days + '</select>' +
-      '<button type="submit">' + (ed ? '저장' : '추가') + '</button></div>' + (ed ? '<button type="button" class="twho" data-act="billcancel" style="align-self:flex-end">수정 취소</button>' : '') + '</form>' +
+      '<select class="in1" id="b_day" aria-label="납부일">' + days + '</select></div>' +
+      '<div class="brow">' + (people.length ? whoSel : '') + '<button type="submit">' + (ed ? '저장' : '추가') + '</button></div>' + (ed ? '<button type="button" class="twho" data-act="billcancel" style="align-self:flex-end">수정 취소</button>' : '') + '</form>' +
       '<div class="list">' + (l.length ? l.map(function (b) {
-        var st = billState(b), done = b.paid === thisMonth();
+        var st = billState(b), done = b.paid === mm;
         return '<div class="trow bill' + (done ? ' done' : '') + '"><label><input type="checkbox" data-billpaid="' + esc(b.id) + '"' + (done ? ' checked' : '') + '><span>' + esc(b.name) +
-          '<small>매달 ' + (b.day === 31 ? '말일' : b.day + '일') + ' · ' + esc(b.by || '') + '</small></span></label>' +
+          '<small>매달 ' + (b.day === 31 ? '말일' : b.day + '일') + (people.length ? ' · <b style="color:' + (b.who ? colorOf(b.who) : 'var(--mute)') + '">' + esc(b.who || '공용') + '</b>' : '') + '</small></span></label>' +
           '<span class="bamt"><b>' + won(b.amount) + '</b><em class="' + st[1] + '">' + st[0] + '</em></span>' +
           '<button class="twho" data-billedit="' + esc(b.id) + '">수정</button>' +
           '<button class="iconbtn plain" data-billdel="' + esc(b.id) + '" aria-label="' + esc(b.name) + ' 지우기">' + ic('trash', 20, 'var(--mute)') + '</button></div>';
-      }).join('') : emptyBox('관리비·통신비처럼 매달 나가는 돈을 넣어 보세요')) + '</div>' +
+      }).join('') : emptyBox(f === '*' ? '관리비·통신비처럼 매달 나가는 돈을 넣어 보세요' : '아직 없어요')) + '</div>' +
       '<p style="font-size:12px;color:var(--mute);text-align:center;margin:6px 0 0">체크는 이번 달만 유지되고, 다음 달 1일에 저절로 풀려요</p>';
   }
 
@@ -1504,6 +1518,7 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       S.edit.days = wl.sort().join(','); app.innerHTML = renderEdit(); bindEdit(); return;
     }
     if (ds.kind) { S.todoKind = ds.kind; S.favEdit = false; S.billEdit = ''; render(); return; }
+    if (ds.bw !== undefined && S.view === 'todo') { S.billWho = ds.bw; S.billEdit = ''; render(true); return; }
     if (ds.billedit) { S.billEdit = ds.billedit; render(); var bn = document.getElementById('b_name'); if (bn) bn.focus(); return; }
     if (ds.billdel) { var bd = billById(ds.billdel); if (bd && confirm('\'' + bd.name + '\' 고정비를 지울까요?')) quick(function (D) { D.bills = (D.bills || []).filter(function (x) { return x.id !== ds.billdel; }); }, 'billDel', [S.code, S.dev, ds.billdel]); return; }
     if (ds.tw !== undefined && S.view === 'todo') { S.todoWho = ds.tw; render(true); return; }
@@ -1680,8 +1695,8 @@ header.top h1{white-space:nowrap;font-size:clamp(22px,6.6vw,28px)}header.top>div
       var bnm = document.getElementById('b_name').value.trim(), bam = +String(document.getElementById('b_amt').value).replace(/[^0-9]/g, ''), bdy = +document.getElementById('b_day').value;
       if (!bnm) { toast('이름을 적어 주세요'); return; }
       if (!bam) { toast('금액을 숫자로 적어 주세요'); return; }
-      var old = S.billEdit ? billById(S.billEdit) : null;
-      var nb = { id: old ? old.id : '', name: bnm, amount: bam, day: bdy, paid: old ? old.paid : '', by: old ? old.by : S.me, at: old ? old.at : nowStamp() };
+      var old = S.billEdit ? billById(S.billEdit) : null, bwEl = document.getElementById('b_who'), bwho = bwEl ? bwEl.value : (old ? old.who || '' : '');
+      var nb = { id: old ? old.id : '', name: bnm, amount: bam, day: bdy, who: bwho, paid: old ? old.paid : '', by: old ? old.by : S.me, at: old ? old.at : nowStamp() };
       S.billEdit = '';
       quick(function (D) { D.bills = D.bills || []; if (old) D.bills = D.bills.map(function (x) { return x.id === old.id ? Object.assign({}, x, nb) : x; }); else D.bills.push(Object.assign({}, nb, { id: tmpId() })); }, 'billSave', [S.code, S.dev, nb]);
       return;
